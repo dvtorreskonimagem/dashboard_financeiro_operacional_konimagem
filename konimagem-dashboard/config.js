@@ -14,6 +14,6 @@
    normalmente só no navegador local (localStorage), sem sincronizar.
    ========================================================================== */
 window.__KONI_CONFIG = {
-  SUPABASE_URL:https://whmoyxwlipqnyvutwpne.supabase.co,
-  SUPABASE_ANON_KEY:sb_publishable_BHzj5zG9mDa8R1Mp3DxYpg_wRwDo1bL
+  SUPABASE_URL:"https://whmoyxwlipqnyvutwpne.supabase.co",
+  SUPABASE_ANON_KEY:"sb_publishable_BHzj5zG9mDa8R1Mp3DxYpg_wRwDo1bL"
 };
