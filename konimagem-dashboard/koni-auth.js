@@ -16,6 +16,17 @@
 (function () {
   "use strict";
 
+  // true  = pede e-mail e senha toda vez que o site/app é aberto (a sessão só vale
+  //         enquanto a aba/app continuar aberto; recarregar a página mantém).
+  // false = comportamento anterior: lembra o login neste aparelho.
+  var EXIGIR_LOGIN_A_CADA_ABERTURA = true;
+  function marcarAberto(on) {
+    try { if (on) sessionStorage.setItem("koni_mob_ok", "1"); else sessionStorage.removeItem("koni_mob_ok"); } catch (e) {}
+  }
+  function jaAbertoNestaAba() {
+    try { return sessionStorage.getItem("koni_mob_ok") === "1"; } catch (e) { return false; }
+  }
+
   var sb = window.__sb || null;
 
   // Sem Supabase configurado: não mexe em nada. O login original (offline)
@@ -69,6 +80,7 @@
         return;
       }
       setMsg("", false);
+      marcarAberto(true);
       await aplicarSessaoSupabase(res.data.user);
     } catch (e) {
       console.error("[KONI] login:", e);
@@ -80,6 +92,7 @@
   window.doLogout = async function () {
     if (!confirm("Sair do dashboard?")) return;
     try { await sb.auth.signOut(); } catch (e) {}
+    marcarAberto(false);
     SESSION = null;
     if (el("loginGate")) el("loginGate").classList.add("show");
     if (el("loginUser")) el("loginUser").value = "";
@@ -123,7 +136,7 @@
     try {
       var r = await sb.auth.getSession();
       var session = r && r.data ? r.data.session : null;
-      if (session && session.user) {
+      if (session && session.user && (!EXIGIR_LOGIN_A_CADA_ABERTURA || jaAbertoNestaAba())) {
         await aplicarSessaoSupabase(session.user);
       } else {
         // Supabase é a única fonte de verdade: ignora qualquer sessão que o
