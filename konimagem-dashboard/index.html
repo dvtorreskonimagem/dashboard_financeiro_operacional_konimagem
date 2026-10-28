@@ -5019,13 +5019,13 @@ function _renderExecBase(){
   const sparkMB=sparkData('margemBruta').map(v=>v*100),sparkML=sparkData('margemLiq').map(v=>v*100);
 
   const cards=[
-    ['FATURAMENTO BRUTO',fBRL(t.rb),'k-navy','Σ Receita Bruta (linhas de receita)',null,cmp('rb'),mkSpark(sparkRb,cNavy)],
-    ['FATURAMENTO LÍQUIDO',fBRL(t.rl),'k-navy','Receita Bruta - Impostos',null,cmp('rl'),mkSpark(sparkRl,cNavy)],
-    ['CUSTOS',fBRL(t.custo),'k-cost','Σ dos 28 fornecedores (Custo Total)',null,cmp('custo',true),mkSpark(sparkCusto,cCost)],
-    ['DESPESAS TOTAIS',fBRL(t.dt),'k-cost','Despesas Gerais + Despesa com Folha',null,cmp('dt',true),mkSpark(sparkDt,cCost)],
-    ['LUCRO BRUTO',fBRL(t.lucroBruto),t.lucroBruto>=0?'k-pos':'k-neg','Receita Líquida − Custo Total',t.lucroBruto>=0?'pos':'neg',cmp('lucroBruto'),mkSpark(sparkLB,t.lucroBruto>=0?cPos:cNeg)],
+    ['FATURAMENTO BRUTO',fBRL(t.rb,0),'k-navy','Σ Receita Bruta (linhas de receita)',null,cmp('rb'),mkSpark(sparkRb,cNavy)],
+    ['FATURAMENTO LÍQUIDO',fBRL(t.rl,0),'k-navy','Receita Bruta - Impostos',null,cmp('rl'),mkSpark(sparkRl,cNavy)],
+    ['CUSTOS',fBRL(t.custo,0),'k-cost','Σ dos 28 fornecedores (Custo Total)',null,cmp('custo',true),mkSpark(sparkCusto,cCost)],
+    ['DESPESAS TOTAIS',fBRL(t.dt,0),'k-cost','Despesas Gerais + Despesa com Folha',null,cmp('dt',true),mkSpark(sparkDt,cCost)],
+    ['LUCRO BRUTO',fBRL(t.lucroBruto,0),t.lucroBruto>=0?'k-pos':'k-neg','Receita Líquida − Custo Total',t.lucroBruto>=0?'pos':'neg',cmp('lucroBruto'),mkSpark(sparkLB,t.lucroBruto>=0?cPos:cNeg)],
     ['MARGEM BRUTA',fPct(t.margemBruta),t.margemBruta>=0?'k-pos':'k-neg','(RL − Custo Total) / RL · inclui uso interno',t.margemBruta>=0?'pos':'neg',cmpPP('margemBruta'),mkSpark(sparkMB,t.margemBruta>=0?cPos:cNeg)],
-    ['LUCRO LÍQUIDO',fBRL(t.lucroLiq),t.lucroLiq>=0?'k-pos':'k-neg','Receita Líquida - (Custo + Despesas Totais)',t.lucroLiq>=0?'pos':'neg',cmp('lucroLiq'),mkSpark(sparkLL,t.lucroLiq>=0?cPos:cNeg)],
+    ['LUCRO LÍQUIDO',fBRL(t.lucroLiq,0),t.lucroLiq>=0?'k-pos':'k-neg','Receita Líquida - (Custo + Despesas Totais)',t.lucroLiq>=0?'pos':'neg',cmp('lucroLiq'),mkSpark(sparkLL,t.lucroLiq>=0?cPos:cNeg)],
     ['MARGEM LÍQUIDA',fPct(t.margemLiq),t.margemLiq>=0?'k-pos':'k-neg','(RL − Custo − Despesas) / RL · visão consolidada',t.margemLiq>=0?'pos':'neg',cmpPP('margemLiq'),mkSpark(sparkML,t.margemLiq>=0?cPos:cNeg)],
   ];
   const _ex={
