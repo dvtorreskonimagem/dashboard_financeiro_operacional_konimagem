@@ -8718,12 +8718,16 @@ document.getElementById('confxInput').addEventListener('change',ev=>{
 });
 
 /* ===== Visão por cliente (aba Dados): tudo do cliente num lugar só — faturamento, custos por fornecedor (AGFA, Equinix, demais), despesas, com origem de cada valor e, se o Excel estiver carregado, a coluna Excel e a diferença ===== */
-const VC={cli:'',ano:0,mes:-1};
+const VC={cli:'',ano:0,mes:-1}; let VC_IX={};
 function vcAgg(rows,cli,ano,mes){
   const o={rb:0,rl:0,c:0,dg:0,df:0,sup:{},n:0};
   rows.forEach(r=>{ if(r.cliente!==cli||+r.ano!==ano||(mes&&+r.mesNum!==mes)) return; o.n++;
     o.rb+=+r.rb||0; o.rl+=+r.rl||0; o.c+=+r.custoTotal||0; o.dg+=+r.despGerais||0; o.df+=+r.despFolha||0;
-    for(const [sn,v] of Object.entries(r.sup||{})){ const f=cxFam(sn); o.sup[f]=(o.sup[f]||0)+(+v||0); } });
+    for(const [sn,v] of Object.entries(r.sup||{})){
+      // fornecedor consolidado (ex.: HYLINK) é desmembrado por serviço, igual à Matriz Cliente × Fornecedor
+      const sp=(+v)?supSvcSplit(r,sn,+v,VC_IX):null;
+      if(sp){ sp.forEach(([k,x])=>{ o.sup[k]=(o.sup[k]||0)+x; }); continue; }
+      o.sup[sn]=(o.sup[sn]||0)+(+v||0); } });
   return o;
 }
 function vcBaseIdx(cli,ano,mes){ return BASE_ORIG.findIndex(r=>r.cliente===cli&&+r.ano===ano&&+r.mesNum===mes&&r.natureza==='RECEITA'); }
@@ -8732,7 +8736,7 @@ function vcOrigem(cli,ano,mes,sn){
   try{
     if(/^AGFA/.test(sn)){ const l=AGFA_LANC.filter(x=>x.cliente===cli&&x.ano===ano&&x.mesNum===mes); if(l.length) out.push('AGFA: '+l.length+' lanç. (US$ '+l.reduce((t,x)=>t+(+x.valor||0),0).toLocaleString('pt-BR',{maximumFractionDigits:2})+')'); }
     if(sn==='EQUINIX'){ const q=equinixRateio(ano,mes); if(q&&q.linhas&&q.linhas.some(x=>x.cliente===cli)) out.push('rateio da aba Equinix'); }
-    const rl=RATEIO_LANC.filter(l=>l.ano===ano&&l.mes===mes&&(cxFam(l.key||l.forn)===sn||cxFam(l.forn)===sn)&&(l.itens||[]).some(i=>i.cliente===cli));
+    const rl=RATEIO_LANC.filter(l=>l.ano===ano&&l.mes===mes&&(l.key===sn||cxFam(l.key||l.forn)===sn||cxFam(l.forn)===sn)&&(l.itens||[]).some(i=>i.cliente===cli));
     if(rl.length) out.push('rateio lançado (aba Rateios)');
     const ed=ROWS.some(r=>r.cliente===cli&&+r.ano===ano&&+r.mesNum===mes&&r._edited); if(ed&&!out.length) out.push('base editada');
   }catch(e){}
@@ -8756,7 +8760,7 @@ function vcRender(){
     sel.innerHTML=clis.map(c=>'<option'+(c===VC.cli?' selected':'')+'>'+esc(c)+'</option>').join('');
     selA.innerHTML=anos.map(a=>'<option'+(a===VC.ano?' selected':'')+'>'+a+'</option>').join('');
     selM.innerHTML='<option value="0"'+(VC.mes===0?' selected':'')+'>Ano todo</option>'+MESES.map((m,i)=>'<option value="'+(i+1)+'"'+(VC.mes===i+1?' selected':'')+'>'+esc(m)+'</option>').join('');
-    const cli=VC.cli, ano=VC.ano, mes=VC.mes;
+    const cli=VC.cli, ano=VC.ano, mes=VC.mes; VC_IX=supSvcIndex();
     const temE=!!(CONFX&&CONFX.E);
     const info=document.getElementById('vcExcelInfo'); if(info) info.innerHTML=temE?'Excel carregado: <b>'+esc(CONFX.nome)+'</b>':'Nenhum Excel carregado (opcional, só para comparar)';
     const nomeSup=sn=>cxSupNome(sn);
