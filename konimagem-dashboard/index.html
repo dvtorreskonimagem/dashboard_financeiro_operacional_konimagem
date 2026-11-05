@@ -5997,6 +5997,146 @@ function franqAgg(rows){
   return res;
 }
 
+/* ===== Franquia: vigência atual + anterior, com gráfico de volumetria (desktop e celular) ===== */
+let FRANQ_VIG='ambas'; // 'ambas' | 'atual' | 'anterior'
+const FQ_NM=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+// Ciclos (vigências) de um cliente, calculados pelo calendário e pelo FRANQUIA_CICLO — independente dos filtros do topo.
+// atual = ciclo que contém o mês de hoje (pode estar sem lançamento ainda); anterior = ciclo imediatamente antes.
+function franqCiclosCli(cliente){
+  const rs=ROWS.filter(r=>isRecCli(r)&&r.cliente===cliente&&r.franquiaAnual>0).sort(sortCrono);
+  if(!rs.length) return null;
+  const mi=FRANQUIA_CICLO[cliente]||1;
+  const hoje=new Date(), aH=hoje.getFullYear(), mH=hoje.getMonth()+1, idxHoje=aH*12+mH;
+  const kAtual=mH>=mi?aH:aH-1;
+  const franqUlt=rs[rs.length-1].franquiaAnual||0;
+  const mk=(k)=>{
+    const rc=rs.filter(r=>(r.mesNum>=mi?r.ano:r.ano-1)===k);
+    const meses=[]; let acRun=0, total=0, lanc=0, ultIdx=-1;
+    for(let i=0;i<12;i++){
+      const mn=((mi-1+i)%12)+1, an=k+((mi-1+i)>=12?1:0);
+      const rm=rc.filter(r=>r.ano===an&&r.mesNum===mn);
+      const ce=rm.filter(r=>r.qtdeExames>0);
+      const vol=ce.length?rm.reduce((t,r)=>t+(r.qtdeExames||0),0):null;
+      if(vol!=null){ acRun+=vol; }
+      const ac=ce.length?((ce[ce.length-1].examesAcum>0)?ce[ce.length-1].examesAcum:acRun):null;
+      if(ac!=null){ total=ac; lanc++; ultIdx=i; }
+      meses.push({mn,an,label:FQ_NM[mn-1]+'/'+String(an).slice(2),vol,acum:ac});
+    }
+    const mf=mi===1?12:mi-1, anoFim=mi===1?k:k+1, idxFim=anoFim*12+mf;
+    const franq=rc.length?(rc[rc.length-1].franquiaAnual||franqUlt):franqUlt;
+    const fechado=idxFim<idxHoje, pct=franq?total/franq:0, exced=total-franq;
+    let status; if(fechado) status=exced>0?'Cobrar':'Fechada'; else status=pct>1?'Excedida':(pct>=0.8?'Atenção':'Ok');
+    return {k,meses,total,lanc,ultIdx,franq,pct,exced,fechado,status,vazio:lanc===0,
+      periodo:FQ_NM[mi-1]+'/'+k+' → '+FQ_NM[mf-1]+'/'+anoFim};
+  };
+  const atual=mk(kAtual), anterior=mk(kAtual-1);
+  // último mês (em qualquer dos dois ciclos) que já tem volumetria
+  let ult=null, pen=null;
+  [anterior,atual].forEach(c=>c.meses.forEach(m=>{ if(m.vol!=null){ pen=ult; ult=m; } }));
+  return {cliente,mi,franq:atual.franq,atual,anterior,ultMes:ult,penMes:pen};
+}
+function franqVigencias(fr){ const o={}; fr.forEach(f=>{ o[f.cliente]=franqCiclosCli(f.cliente); }); return o; }
+function franqSetVig(v){ FRANQ_VIG=v; renderFranq(); }
+function franqCorSt(st){ return (st==='Excedida'||st==='Cobrar')?'var(--neg)':st==='Atenção'?'var(--warn)':st==='Fechada'?'var(--ink3)':'var(--pos)'; }
+function franqChipSt(st){
+  const t={Excedida:'⚠ Excedida','Atenção':'⚠ Atenção',Ok:'✓ Ok',Cobrar:'💰 Cobrar excedente',Fechada:'✓ Fechada'}[st]||st, c=franqCorSt(st);
+  return `<span style="font-size:11px;font-weight:600;color:${c};background:color-mix(in srgb,${c} 12%,transparent);padding:1px 7px;border-radius:4px;white-space:nowrap">${t}</span>`;
+}
+function franqBloco(c,rotulo,compacto){
+  const cor=franqCorSt(c.status), pct=Math.round(c.pct*100), bar=Math.min(pct,100);
+  let txt;
+  if(c.vazio) txt=c.fechado?'sem lançamentos neste período':'sem lançamentos ainda — ciclo começou em '+c.periodo.split(' → ')[0];
+  else if(c.fechado) txt=`total ${fNum(c.total)} / ${fNum(c.franq)} · `+(c.exced>0?`<span style="color:var(--neg);font-weight:700">excedente +${fNum(c.exced)} exames</span>`:`dentro da franquia (saldo ${fNum(-c.exced)})`);
+  else txt=`acum ${fNum(c.total)} / ${fNum(c.franq)} · saldo <span style="color:${c.exced>0?'var(--neg)':'var(--ink3)'};font-weight:600">${fNum(-c.exced)}</span>`;
+  return `<div style="${compacto?'margin-top:7px;padding-top:6px;border-top:1px dashed var(--line2)':''}">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap">
+      ${franqChipSt(c.status)}
+      <span style="font-size:11px;font-weight:600;color:var(--ink2)">${rotulo}</span>
+      <span class="mono" style="font-size:11px;color:var(--ink3)">${c.periodo}</span>
+      <span style="font-size:10.5px;color:var(--ink3);margin-left:auto">${txt}</span>
+      <span style="font-size:${compacto?'13':'15'}px;font-weight:700;color:${cor};min-width:44px;text-align:right">${c.vazio?'—':pct+'%'}</span>
+    </div>
+    <div style="height:${compacto?5:7}px;background:var(--line2);border-radius:4px;overflow:hidden"><div style="height:100%;width:${bar}%;background:${cor};border-radius:4px"></div></div>
+  </div>`;
+}
+function franqListaHtml(fr,VIG){
+  const modo=FRANQ_VIG;
+  const ord={Cobrar:0,Excedida:1,'Atenção':2,Ok:3,Fechada:4};
+  const L=fr.map(f=>({f,v:VIG[f.cliente]})).filter(x=>x.v);
+  const chave=x=>{ const a=x.v.atual, p=x.v.anterior;
+    if(modo==='anterior') return [ord[p.vazio?'Fechada':p.status],-p.pct];
+    const s=Math.min(ord[a.status], (modo==='ambas'&&!p.vazio)?ord[p.status]:9);
+    return [s,-a.pct]; };
+  L.sort((x,y)=>{ const a=chave(x), b=chave(y); return (a[0]-b[0])||(a[1]-b[1])||x.f.cliente.localeCompare(y.f.cliente); });
+  const btn=(k,t)=>`<button class="mini-btn" onclick="franqSetVig('${k}')" style="padding:4px 12px;font-size:12px;${modo===k?'background:var(--navy,#16324d);color:#fff;border-color:transparent':''}">${t}</button>`;
+  const bar=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+    <span style="font-size:12px;color:var(--ink3);font-weight:600">Vigência:</span>${btn('ambas','Atual + anterior')}${btn('atual','Só atual')}${btn('anterior','Só anterior')}
+    <span class="hint" style="margin-left:auto">Clique em um cliente para ver o gráfico de volumetria mês a mês</span></div>`;
+  const rows=L.map(({f,v})=>{
+    const enc=CONTRATOS_ENCERRADOS[f.cliente];
+    const encBadge=enc?` <span style="font-size:10.5px;color:var(--ink3);opacity:.7">(encerrado)</span>`:'';
+    let corpo;
+    if(modo==='atual') corpo=franqBloco(v.atual,'Vigência atual');
+    else if(modo==='anterior') corpo=franqBloco(v.anterior,'Vigência anterior');
+    else corpo=franqBloco(v.atual,'Vigência atual')+(v.anterior.vazio&&enc?'':franqBloco(v.anterior,'Vigência anterior',true));
+    return `<div class="fq-cli" data-cli="${esc(f.cliente)}" onclick="franqGrafico(this.dataset.cli)" title="Clique para ver o gráfico de volumetria" style="cursor:pointer;padding:9px 6px;border-bottom:1px solid var(--line2)${enc?';opacity:.62':''}">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><span style="font-size:13px;font-weight:700;color:var(--ink1)">${esc(f.cliente)}${encBadge}</span><span style="font-size:11px;color:var(--acc,#2a78d6);margin-left:auto">📊 ver volumetria</span></div>${corpo}</div>`;
+  }).join('');
+  return bar+(rows||'<span style="color:var(--ink3);font-size:13px">Nenhum dado de franquia disponível.</span>');
+}
+function franqGrafico(cliente){
+  const v=franqCiclosCli(cliente); if(!v){ return; }
+  const A=v.anterior, B=v.atual, fm=n=>n==null?'—':fNum(n);
+  const u=v.ultMes, p=v.penMes;
+  const card=(t,val,sub)=>`<div style="flex:1;min-width:150px;border:1px solid var(--line2);border-radius:10px;padding:9px 12px"><div style="font-size:10.5px;color:var(--ink3);font-weight:700;letter-spacing:.03em">${t}</div><div style="font-size:19px;font-weight:700;font-family:var(--font-mono)">${val}</div><div style="font-size:11px;color:var(--ink3)">${sub||''}</div></div>`;
+  const dUlt=(u&&p&&p.vol)?((u.vol-p.vol)/p.vol):null;
+  const mediaA=A.lanc?A.total/A.lanc:null;
+  const cards=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+    ${card('ÚLTIMO MÊS COM DADOS',u?fm(u.vol):'—',u?u.label+(dUlt!=null?` · ${dUlt>=0?'+':''}${(dUlt*100).toFixed(1).replace('.',',')}% vs ${p.label}`:''):'sem lançamentos')}
+    ${card('VIGÊNCIA ANTERIOR',fm(A.total),`${A.periodo} · franquia ${fm(A.franq)}<br>`+(A.vazio?'sem lançamentos':A.exced>0?`<b style="color:var(--neg)">excedente +${fm(A.exced)}</b>`:`dentro da franquia (saldo ${fm(-A.exced)})`))}
+    ${card('VIGÊNCIA ATUAL',B.vazio?'—':fm(B.total),`${B.periodo}<br>`+(B.vazio?'sem lançamentos ainda':`${fPct(B.pct)} da franquia de ${fm(B.franq)}`))}
+    ${card('MÉDIA MENSAL (ANTERIOR)',mediaA!=null?fm(Math.round(mediaA)):'—',A.lanc?A.lanc+' meses lançados':'')}</div>`;
+  let tb='<div class="tbl-wrap"><table><thead><tr><th>Mês do ciclo</th><th>Anterior</th><th>Atual</th><th>Variação</th></tr></thead><tbody>';
+  for(let i=0;i<12;i++){ const a=A.meses[i], b=B.meses[i], d=(a.vol&&b.vol!=null)?(b.vol-a.vol)/a.vol:null;
+    tb+=`<tr><td>${FQ_NM[a.mn-1]}</td><td class="mono">${fm(a.vol)} <span style="color:var(--ink3);font-size:10.5px">${a.label}</span></td><td class="mono">${fm(b.vol)} <span style="color:var(--ink3);font-size:10.5px">${b.label}</span></td><td class="mono" style="color:${d==null?'var(--ink3)':d<0?'var(--neg)':'var(--pos)'}">${d==null?'—':(d>=0?'+':'')+(d*100).toFixed(1).replace('.',',')+'%'}</td></tr>`; }
+  tb+='</tbody></table></div>';
+  openModal(`📊 Volumetria de exames — ${esc(cliente)}`,
+    cards+`<div id="franqModVol" style="height:300px"></div><div id="franqModAc" style="height:260px;margin-top:6px"></div><div style="margin-top:12px">${tb}</div>`);
+  try{ document.querySelector('#modalBg .modal').style.maxWidth='980px'; }catch(e){}
+  setTimeout(()=>{
+    try{
+      ['franqModVol','franqModAc'].forEach(id=>{ if(CH[id]){ try{CH[id].dispose();}catch(e){} delete CH[id]; } });
+      const meses=A.meses.map(m=>FQ_NM[m.mn-1]);
+      const cA='#d98a14', cB='#2a78d6';
+      const c1=chart('franqModVol');
+      c1.setOption({
+        title:{text:'Exames por mês — vigência anterior × atual',textStyle:{fontSize:13},left:0},
+        tooltip:{trigger:'axis',axisPointer:{type:'shadow'},valueFormatter:x=>x==null?'—':fNum(x)},
+        legend:{data:['Anterior ('+A.periodo+')','Atual ('+B.periodo+')'],bottom:0,textStyle:{fontSize:11}},
+        grid:{left:56,right:14,top:36,bottom:46},
+        xAxis:{type:'category',data:meses},
+        yAxis:{type:'value',axisLabel:{formatter:x=>x>=1000?(x/1000).toLocaleString('pt-BR')+'k':x}},
+        series:[
+          {name:'Anterior ('+A.periodo+')',type:'bar',itemStyle:{color:cA},data:A.meses.map(m=>m.vol),
+            markLine:mediaA?{silent:true,symbol:'none',lineStyle:{color:cA,type:'dashed'},label:{formatter:'média anterior '+fNum(Math.round(mediaA)),fontSize:10,position:'insideEndTop'},data:[{yAxis:mediaA}]}:undefined},
+          {name:'Atual ('+B.periodo+')',type:'bar',itemStyle:{color:cB},data:B.meses.map(m=>m.vol)}]});
+      const c2=chart('franqModAc');
+      c2.setOption({
+        title:{text:'Acumulado no ciclo × franquia',textStyle:{fontSize:13},left:0},
+        tooltip:{trigger:'axis',valueFormatter:x=>x==null?'—':fNum(x)},
+        legend:{data:['Anterior','Atual'],bottom:0,textStyle:{fontSize:11}},
+        grid:{left:56,right:14,top:36,bottom:46},
+        xAxis:{type:'category',data:meses},
+        yAxis:{type:'value',axisLabel:{formatter:x=>x>=1000?(x/1000).toLocaleString('pt-BR')+'k':x}},
+        series:[
+          {name:'Anterior',type:'line',connectNulls:false,itemStyle:{color:cA},lineStyle:{color:cA},data:A.meses.map(m=>m.acum),
+            markLine:{silent:true,symbol:'none',lineStyle:{color:'#d93a3a',type:'dashed'},label:{formatter:'franquia '+fNum(A.franq),fontSize:10,position:'insideStartTop'},data:[{yAxis:A.franq}]}},
+          {name:'Atual',type:'line',itemStyle:{color:cB},lineStyle:{color:cB},data:B.meses.map(m=>m.acum)}]});
+      c1.resize(); c2.resize();
+    }catch(e){ console.warn('franqGrafico',e); }
+  },60);
+}
+
 /* ---------- MATRIZ CLIENTE x FORNECEDOR ---------- */
 /* Desmembra fornecedores consolidados (ex.: 'HYLINK') por serviço, só para EXIBIÇÃO. Os lançamentos de rateio
    guardam o serviço (l.key = 'HYLINK - NOC'); a linha da base só traz o total consolidado. A divisão
@@ -11773,6 +11913,8 @@ function renderEquinixCap(){
 /* ---------- FRANQUIA ---------- *//* ---------- FRANQUIA ---------- */
 function renderFranq(){
   const fr=franqAgg(filtered());
+  const VIG=franqVigencias(fr);
+  const stAt=f=>VIG[f.cliente]?VIG[f.cliente].atual.status:f.status;
   // Totais do topo: soma de exames de TODOS os clientes com franquia cadastrada — no mês vigente
   // (mesmo mês usado nas colunas da tabela) e o acumulado do ano (YTD). Clientes com contrato
   // encerrado continuam contando aqui, igual já contam na tabela — só a franquia individual deles
@@ -11780,11 +11922,13 @@ function renderFranq(){
   // totalMes: exames do mês de referência (mesVigLabel) — igual ao KPI da Visão Operacional;
   // clientes sem lançamento nesse mês contam 0 (não entra mês anterior de ninguém)
   const totalMes=fr.reduce((s,f)=>s+(f.mesQtde||0),0);
-  const totalAcum=fr.reduce((s,f)=>s+(f.acum||0),0);
+  const totalAcum=fr.reduce((s,f)=>s+(VIG[f.cliente]?VIG[f.cliente].atual.total:(f.acum||0)),0);
   const totalFranq=fr.reduce((s,f)=>s+(f.franq||0),0);
-  const nExc=fr.filter(f=>f.status==='Excedida').length;
-  const nAtt=fr.filter(f=>f.status==='Atenção').length;
-  const nOk=fr.filter(f=>f.status==='Ok').length;
+  const nExc=fr.filter(f=>stAt(f)==='Excedida').length;
+  const nAtt=fr.filter(f=>stAt(f)==='Atenção').length;
+  const nOk=fr.filter(f=>stAt(f)==='Ok').length;
+  const aCobrar=fr.map(f=>VIG[f.cliente]).filter(v=>v&&v.anterior.status==='Cobrar');
+  const nCob=aCobrar.length, examesCob=aCobrar.reduce((t,v)=>t+v.anterior.exced,0);
   // Label do mês: usa mesVigLabel (mês mais recente com exame lançado), nunca o mês do calendário
   const mesKpiLabel=fr.mesVigLabel?(fr.mesVigLabel.split(' - ')[1]||fr.mesVigLabel):'';
   const statusCard=`<div class="kpi k-navy" style="display:flex;flex-direction:column;justify-content:center">
@@ -11809,6 +11953,7 @@ function renderFranq(){
         <span style="font-size:20px;font-weight:700;font-family:var(--font-mono);color:var(--pos);line-height:1">${nOk}</span>
       </div>
     </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--ink2)">💰 Vigência anterior a cobrar: <b style="color:${nCob?'var(--neg)':'var(--ink3)'}">${nCob}</b>${nCob?' cliente(s) · +'+fNum(examesCob)+' exames excedentes':''}</div>
   </div>`;
   document.getElementById('franqKpis').innerHTML=[
     [`EXAMES NO MÊS${mesKpiLabel?' ('+mesKpiLabel+')':''}`,'',fNum(totalMes),'k-navy'],
@@ -11852,7 +11997,7 @@ function renderFranq(){
         </div>
       </div>`;
     }).join('');
-    document.getElementById('chartFranq').innerHTML=`<div style="padding:4px 0">${html||'<span style="color:var(--ink3);font-size:13px">Nenhum dado de franquia disponível.</span>'}</div>`;
+    document.getElementById('chartFranq').innerHTML=`<div style="padding:4px 0">${franqListaHtml(fr,VIG)}</div>`;
   }
   const cols=[['cliente','Cliente'],['franq','Franquia Anual'],['mesQtde',fr.mesVigLabel?`Exames ${fr.mesVigLabel.split(' - ')[1]||fr.mesVigLabel}`:'Exames no Mês'],['acum','Exames YTD'],['pct','% Atingido'],['saldo','Saldo'],['status','Status']];
   let h='<thead><tr>'+cols.map(([k,l])=>`<th>${l}</th>`).join('')+'</tr></thead><tbody>';
@@ -15813,16 +15958,59 @@ body.mob-on>*:not(#mobApp):not(#mobSheet):not(#mobCapa):not(.modal-bg):not(scrip
   }
   function vFranq(){
     var rows=ROWS.filter(function(r){return String(r.ano)===String(M.ano)&&r.natureza==='RECEITA';});
-    var L=franqAgg(rows).slice().sort(function(a,b){return b.pct-a.pct;});
-    if(!L.length) return '<div class="mb-empty">Sem franquias em '+M.ano+'.</div>';
-    var n={Excedida:0,'Atenção':0,Ok:0}; L.forEach(function(f){n[f.status]++;});
-    var h='<div class="mb-grid"><div class="mb-kpi"><div class="k">Excedidas</div><div class="v" style="color:var(--mb-neg)">'+n.Excedida+'</div></div><div class="mb-kpi"><div class="k">Em atenção (80%+)</div><div class="v" style="color:var(--mb-warn)">'+n['Atenção']+'</div></div></div>';
-    return h+L.map(function(f){ var cl=f.status==='Excedida'?'neg':f.status==='Atenção'?'warn':'pos', cor=f.status==='Excedida'?'var(--mb-neg)':f.status==='Atenção'?'var(--mb-warn)':'var(--mb-pos)';
-      return '<div class="mb-card"><div class="mb-row"><b>'+esc(f.cliente)+'</b><span class="mb-pill '+cl+'">'+fPct(f.pct,0)+' · '+f.status+'</span></div><div class="mb-bar"><i style="width:'+Math.min(100,Math.round(f.pct*100))+'%;background:'+cor+'"></i></div><div class="mb-hint">'+f.acum.toLocaleString('pt-BR')+' de '+f.franq.toLocaleString('pt-BR')+' exames · saldo '+f.saldo.toLocaleString('pt-BR')+'</div></div>'; }).join('');
+    var L0=franqAgg(rows); if(!L0.length) return '<div class="mb-empty">Sem franquias em '+M.ano+'.</div>';
+    var modo=M.franqVig||'ambas', ord={Cobrar:0,Excedida:1,'Atenção':2,Ok:3,Fechada:4};
+    var L=L0.map(function(f){return {f:f,v:franqCiclosCli(f.cliente)};}).filter(function(x){return x.v;});
+    var nE=0,nA=0,nC=0; L.forEach(function(x){ if(x.v.atual.status==='Excedida')nE++; else if(x.v.atual.status==='Atenção')nA++; if(x.v.anterior.status==='Cobrar')nC++; });
+    L.sort(function(a,b){ var ka=modo==='anterior'?ord[a.v.anterior.vazio?'Fechada':a.v.anterior.status]:Math.min(ord[a.v.atual.status],modo==='ambas'&&!a.v.anterior.vazio?ord[a.v.anterior.status]:9), kb=modo==='anterior'?ord[b.v.anterior.vazio?'Fechada':b.v.anterior.status]:Math.min(ord[b.v.atual.status],modo==='ambas'&&!b.v.anterior.vazio?ord[b.v.anterior.status]:9); return (ka-kb)||(b.v.atual.pct-a.v.atual.pct); });
+    var h='<div class="mb-grid"><div class="mb-kpi"><div class="k">Excedidas (atual)</div><div class="v" style="color:var(--mb-neg)">'+nE+'</div></div><div class="mb-kpi"><div class="k">Em atenção (80%+)</div><div class="v" style="color:var(--mb-warn)">'+nA+'</div></div></div>';
+    h+='<div class="mb-card" style="padding:10px 14px"><div class="mb-row"><span>💰 Vigência anterior a cobrar</span><b style="color:'+(nC?'var(--mb-neg)':'var(--mb-ink2)')+'">'+nC+'</b></div></div>';
+    var chip=function(k,t){ return '<button onclick="mobVig(\''+k+'\')" style="flex:1;border:1px solid var(--mb-line);border-radius:999px;padding:8px 6px;font-size:13px;font-weight:600;'+(modo===k?'background:var(--mb-acc);color:#fff;border-color:var(--mb-acc)':'background:var(--mb-card);color:var(--mb-ink2)')+'">'+t+'</button>'; };
+    h+='<div style="display:flex;gap:6px;margin:0 0 10px">'+chip('ambas','Atual + anterior')+chip('atual','Atual')+chip('anterior','Anterior')+'</div><div class="mb-hint" style="margin:0 4px 8px">Toque em um cliente para ver o gráfico de volumetria.</div>';
+    function cor(st){ return (st==='Excedida'||st==='Cobrar')?'var(--mb-neg)':st==='Atenção'?'var(--mb-warn)':st==='Fechada'?'var(--mb-ink2)':'var(--mb-pos)'; }
+    function cls(st){ return (st==='Excedida'||st==='Cobrar')?'neg':st==='Atenção'?'warn':st==='Ok'?'pos':''; }
+    function bloco(c,rot,sep){
+      var pc=Math.round(c.pct*100), t;
+      if(c.vazio) t=c.fechado?'sem lançamentos':'sem lançamentos ainda';
+      else if(c.fechado) t=c.total.toLocaleString('pt-BR')+' de '+c.franq.toLocaleString('pt-BR')+' · '+(c.exced>0?'<b style="color:var(--mb-neg)">excedente +'+c.exced.toLocaleString('pt-BR')+'</b>':'dentro da franquia');
+      else t=c.total.toLocaleString('pt-BR')+' de '+c.franq.toLocaleString('pt-BR')+' · saldo '+(-c.exced).toLocaleString('pt-BR');
+      var nome={Cobrar:'Cobrar excedente',Fechada:'Fechada'}[c.status]||c.status;
+      return '<div style="'+(sep?'margin-top:10px;padding-top:8px;border-top:1px dashed var(--mb-line)':'')+'"><div class="mb-row"><span style="font-size:12.5px;font-weight:600">'+rot+'</span><span class="mb-pill '+cls(c.status)+'">'+(c.vazio?'—':pc+'%')+' · '+nome+'</span></div><div class="mb-hint" style="margin:2px 0 0">'+c.periodo+'</div><div class="mb-bar"><i style="width:'+Math.min(100,pc)+'%;background:'+cor(c.status)+'"></i></div><div class="mb-hint">'+t+'</div></div>';
+    }
+    return h+L.map(function(x){ var v=x.v, enc=CONTRATOS_ENCERRADOS&&CONTRATOS_ENCERRADOS[x.f.cliente], b;
+      if(modo==='atual') b=bloco(v.atual,'Vigência atual');
+      else if(modo==='anterior') b=bloco(v.anterior,'Vigência anterior');
+      else b=bloco(v.atual,'Vigência atual')+((v.anterior.vazio&&enc)?'':bloco(v.anterior,'Vigência anterior',1));
+      return '<div class="mb-card" data-c="'+esc(x.f.cliente)+'" onclick="mobFranq(this.dataset.c)" style="cursor:pointer;'+(enc?'opacity:.65':'')+'"><div class="mb-row" style="margin-bottom:6px"><b>'+esc(x.f.cliente)+(enc?' <span class="mb-hint" style="display:inline">(encerrado)</span>':'')+'</b><span style="font-size:12px;color:var(--mb-acc)">📊 volumetria ›</span></div>'+b+'</div>'; }).join('');
   }
+  function svgVol(v){
+    var A=v.anterior.meses, B=v.atual.meses, W=340,H=190,pl=36,pr=4,pt=10,pb=22, vals=[];
+    A.concat(B).forEach(function(m){ if(m.vol!=null) vals.push(m.vol); });
+    if(!vals.length) return '<div class="mb-hint">Sem volumetria lançada.</div>';
+    var mx=Math.max.apply(null,vals), gw=(W-pl-pr)/12, bw=Math.max(4,(gw-4)/2), Y=function(x){return pt+(1-x/mx)*(H-pt-pb);};
+    var fm=function(x){return x>=1e6?(x/1e6).toFixed(1)+'M':x>=1e3?(x/1e3).toFixed(0)+'k':String(Math.round(x));}, g='';
+    [mx,mx/2,0].forEach(function(x){ g+='<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+Y(x).toFixed(1)+'" y2="'+Y(x).toFixed(1)+'" stroke="currentColor" stroke-opacity=".15"/><text x="'+(pl-4)+'" y="'+(Y(x)+3).toFixed(1)+'" text-anchor="end" font-size="9" fill="currentColor" opacity=".65">'+fm(x)+'</text>'; });
+    for(var i=0;i<12;i++){ var x0=pl+i*gw+1;
+      if(A[i].vol!=null) g+='<rect x="'+x0.toFixed(1)+'" y="'+Y(A[i].vol).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(H-pb-Y(A[i].vol)).toFixed(1)+'" fill="#d98a14" rx="1.5"/>';
+      if(B[i].vol!=null) g+='<rect x="'+(x0+bw+1).toFixed(1)+'" y="'+Y(B[i].vol).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(H-pb-Y(B[i].vol)).toFixed(1)+'" fill="#2a78d6" rx="1.5"/>';
+      g+='<text x="'+(x0+bw).toFixed(1)+'" y="'+(H-7)+'" text-anchor="middle" font-size="8.5" fill="currentColor" opacity=".7">'+FQ_NM[A[i].mn-1].slice(0,3)+'</text>'; }
+    return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block">'+g+'</svg><div class="mb-hint" style="display:flex;gap:14px;margin-top:4px"><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#d98a14;margin-right:5px"></i>Anterior</span><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#2a78d6;margin-right:5px"></i>Atual</span></div>';
+  }
+  window.mobVig=function(k){ M.franqVig=k; draw(); };
+  window.mobFranq=function(cli){ try{
+    var v=franqCiclosCli(cli); if(!v) return; var A=v.anterior, B=v.atual, u=v.ultMes, p=v.penMes, nf=function(n){return n==null?'—':n.toLocaleString('pt-BR');};
+    var d=(u&&p&&p.vol)?((u.vol-p.vol)/p.vol*100):null;
+    var h='<button class="x" onclick="mobSheet(false)" aria-label="Fechar">✕</button><h3>Volumetria — '+esc(cli)+'</h3>';
+    h+='<p style="margin:0 0 8px"><b>Último mês com dados:</b> '+(u?u.label+' · '+nf(u.vol)+' exames'+(d!=null?' ('+(d>=0?'+':'')+d.toFixed(1).replace('.',',')+'% vs '+p.label+')':''):'nenhum')+'</p>';
+    h+='<p style="margin:0 0 8px;font-size:13px"><b>Anterior</b> '+A.periodo+': '+nf(A.total)+' de '+nf(A.franq)+(A.vazio?' · sem lançamentos':A.exced>0?' · <b style="color:#d93a3a">excedente +'+nf(A.exced)+'</b>':' · dentro da franquia')+'<br><b>Atual</b> '+B.periodo+': '+(B.vazio?'sem lançamentos ainda':nf(B.total)+' de '+nf(B.franq)+' ('+Math.round(B.pct*100)+'%)')+'</p>';
+    h+=svgVol(v)+'<table style="margin-top:10px"><thead><tr><th style="text-align:left">Mês</th><th style="text-align:right">Anterior</th><th style="text-align:right">Atual</th></tr></thead><tbody>';
+    for(var i=0;i<12;i++) h+='<tr><td>'+FQ_NM[A.meses[i].mn-1]+'</td><td style="text-align:right">'+nf(A.meses[i].vol)+'</td><td style="text-align:right">'+nf(B.meses[i].vol)+'</td></tr>';
+    h+='</tbody></table>';
+    document.getElementById('mobSheetBody').innerHTML=h; mobSheet(true); }catch(e){ console.warn('mobFranq',e); } };
   function alertas(){
     var A=[];
     try{ franqAgg(ROWS.filter(function(r){return String(r.ano)===String(new Date().getFullYear())&&r.natureza==='RECEITA';})).filter(function(f){return f.status!=='Ok';}).sort(function(a,b){return b.pct-a.pct;}).forEach(function(f){ A.push([f.status==='Excedida'?'neg':'warn','Franquia',f.cliente+': '+fPct(f.pct,0)+' da franquia ('+f.acum.toLocaleString('pt-BR')+' de '+f.franq.toLocaleString('pt-BR')+')']); }); }catch(e){}
+    try{ franqAgg(ROWS.filter(function(r){return r.natureza==='RECEITA';})).forEach(function(f){ var v=franqCiclosCli(f.cliente); if(v&&v.anterior.status==='Cobrar') A.push(['neg','Franquia',f.cliente+': vigência anterior ('+v.anterior.periodo+') excedeu +'+v.anterior.exced.toLocaleString('pt-BR')+' exames — cobrar']); }); }catch(e){}
     try{ contractAggCached().filter(function(c){return c.status==='Encerrando'||c.status==='Atenção';}).sort(function(a,b){return (a.rest||0)-(b.rest||0);}).forEach(function(c){ A.push([c.status==='Encerrando'?'neg':'warn','Contrato',c.cliente+': '+c.status.toLowerCase()+(c.prazo?' — parcela '+c.parcela+' de '+c.prazo:'')]); }); }catch(e){}
     if(!isCom()){
       try{ divergenciasAgfa().forEach(function(d){ A.push(['warn','AGFA',d.cli+' '+MN[d.mes-1]+'/'+d.ano+': lançado '+fUSD(d.lanc)+' × base '+fUSD(d.base)]); }); }catch(e){}
