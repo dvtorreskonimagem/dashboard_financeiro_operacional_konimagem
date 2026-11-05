@@ -2949,20 +2949,25 @@ html.ui2 #capaHero{margin-top:4px}
       #pg-cliente td,#pg-cliente th{text-align:left}
       #pg-cliente thead th{position:sticky;top:0;z-index:1}
       #pg-cliente tfoot td{background:var(--line2)}
+      #pg-cliente details.cli-det{border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:10px}
+      #pg-cliente details.cli-det>summary{cursor:pointer;padding:13px 16px;font-weight:700;color:var(--navy);font-size:14px;list-style:none}
+      #pg-cliente details.cli-det>summary::before{content:'▸';display:inline-block;margin-right:9px;transition:transform .15s}
+      #pg-cliente details.cli-det[open]>summary::before{transform:rotate(90deg)}
+      .cli-det-b{padding:0 16px 16px}
       #pg-cliente .kpi .sub{font-size:11.5px;color:var(--ink3);margin-top:4px}
     </style>
     <div class="op-hero ex-hero">
       <div class="op-hero-txt">
         <div class="op-eyebrow">KONIMAGEM · DASHBOARD TI</div>
         <h2>Dados por cliente</h2>
-        <p id="cliHint">Clique em um cliente abaixo para ver tudo sobre ele.</p>
+        <p id="cliHint">Escolha um cliente no filtro abaixo para ver tudo sobre ele.</p>
       </div>
       <div class="op-badges"><button class="mini-btn" onclick="cliExportar()" data-html2canvas-ignore="true">⬇ Exportar Excel</button>
         <button class="mini-btn" onclick="window.print()" data-html2canvas-ignore="true">🖨 Imprimir</button></div>
     </div>
-    <div class="panel" style="margin-bottom:6px" data-html2canvas-ignore="true">
-      <div class="fgroup" style="margin-bottom:10px"><label>Buscar cliente</label><input type="text" id="cliBusca" placeholder="Digite parte do nome..." oninput="cliBuscar(this.value)" style="max-width:320px"></div>
-      <div id="cliLista" class="cli-chips"></div>
+    <div class="panel" style="margin-bottom:6px;display:flex;gap:18px;align-items:end;flex-wrap:wrap" data-html2canvas-ignore="true">
+      <div class="fgroup"><label>Cliente</label><select id="cliSelect" onchange="cliSel(this.value)" style="min-width:320px"></select></div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2);padding-bottom:8px"><input type="checkbox" id="cliEnc" onchange="cliToggleEnc(this.checked)"> Incluir contratos encerrados</label>
     </div>
     <div id="cliCorpo"></div>
   </div>
@@ -7262,13 +7267,29 @@ function fichaCliente(nome){
 /* ===== DADOS POR CLIENTE (aba) — só leitura: junta, por cliente, tudo o que o dashboard já sabe ===== */
 let CLI_SEL=''; let CLI_BUSCA=''; let CLI_SIM={saida:null,rej:0,multa:0};
 try{ CLI_SEL=sessionStorage.getItem('koni_cli_sel')||''; }catch(e){}
+let CLI_MULTAS={}; try{ CLI_MULTAS=JSON.parse(localStorage.getItem('koni_cli_multas')||'{}')||{}; }catch(e){ CLI_MULTAS={}; }
+function cliMultaSet(el){ const c=CLI_SEL, f=el.dataset.f; const v=parseFloat(String(el.value).replace(',','.')); CLI_MULTAS[c]=CLI_MULTAS[c]||{}; if(Number.isFinite(v)&&v>0) CLI_MULTAS[c][f]=v; else delete CLI_MULTAS[c][f]; try{ localStorage.setItem('koni_cli_multas',JSON.stringify(CLI_MULTAS)); }catch(e){} renderCliente(); }
+function cliMultasTotal(nome){ return Object.values(CLI_MULTAS[nome]||{}).reduce((s,v)=>s+(+v||0),0); }
+function cliCopiar(id){ const el=document.getElementById(id); if(!el) return; const t=el.innerText; try{ navigator.clipboard.writeText(t).then(()=>{ const b=document.getElementById(id+'Btn'); if(b){ b.textContent='✓ Copiado'; setTimeout(()=>b.textContent='Copiar texto',1800); } }); }catch(e){ const r=document.createRange(); r.selectNodeContents(el); const sl=window.getSelection(); sl.removeAllRanges(); sl.addRange(r); } }
+function cliChartResize(){ try{ if(CH.cliChart) CH.cliChart.resize(); }catch(e){} }
+const CLI_ACAO={'CANCELAR':{cor:'#DC2626',ord:0},'CONFIRMAR E CANCELAR':{cor:'#D97706',ord:1},'NEGOCIAR AGFA':{cor:'#7C3AED',ord:2},'REDISTRIBUIR':{cor:'#2F5D87',ord:3},'SEM AÇÃO':{cor:'#94A3B8',ord:4}};
+function cliTexto(f,D){
+  const pct=f.pct!=null?f.pct.toLocaleString('pt-BR',{maximumFractionDigits:2})+'%':'';
+  if(f.acao==='CANCELAR') return 'Contratado só para este cliente (100% do rateio). Encerrar junto com o contrato; confirmar multa, fidelidade e aviso prévio.';
+  if(f.acao==='CONFIRMAR E CANCELAR') return 'Custo direto sem rateio cadastrado. Confirmar se é exclusivo deste cliente e, se for, cancelar; verificar multa e aviso prévio.';
+  if(f.acao==='NEGOCIAR AGFA'){ const a=D.ag.find(x=>x.tipo==='OPEX'); return 'Contrato AGFA'+(a?' '+a.servico+': parcela '+a.atual+' de '+a.total+', restam '+a.restantes+' até '+a.fim+' (USD '+a.remUSD.toLocaleString('pt-BR',{minimumFractionDigits:2})+')':'')+'. Tende a continuar após a saída: negociar rescisão, cessão a outro cliente ou redução.'; }
+  if(f.acao==='REDISTRIBUIR') return 'Serviço compartilhado: o custo não some, a parcela do cliente ('+pct+') passa aos demais. Pedir ao fornecedor redução de capacidade/preço; sem isso não há economia.';
+  if(f.cat==='sunk') return 'Investimento (CAPEX) já realizado; não há o que cancelar.';
+  return 'Sem custo lançado nos últimos 3 meses. Nenhuma ação necessária.';
+}
+
 const _cliChave=r=>r.ano*12+r.mesNum-1;
 const _cliMM=r=>String(r.mesNum).padStart(2,'0')+'/'+r.ano;
 const _cliKMM=k=>String((k%12)+1).padStart(2,'0')+'/'+Math.floor(k/12);
 function cliListaClientes(){ const m={}; ROWS.forEach(r=>{ if(r.natureza==='RECEITA'&&r.segmento==='CLIENTE'&&r.cliente) m[r.cliente]=1; }); return Object.keys(m).sort((a,b)=>a.localeCompare(b,'pt-BR')); }
 function abrirDadosCliente(nome){ CLI_SEL=nome; CLI_SIM={saida:null,rej:0,multa:0}; try{ sessionStorage.setItem('koni_cli_sel',nome); }catch(e){} goPage('cliente'); }
-function cliSel(nome){ CLI_SEL=nome; CLI_SIM={saida:null,rej:0,multa:0}; try{ sessionStorage.setItem('koni_cli_sel',nome); }catch(e){} renderCliente(); const b=document.getElementById('cliCorpo'); if(b) b.scrollIntoView({block:'start'}); }
-function cliBuscar(v){ CLI_BUSCA=v||''; cliDesenharLista(); }
+function cliSel(nome){ CLI_SEL=nome||''; CLI_SIM={saida:null,rej:0,multa:0}; try{ sessionStorage.setItem('koni_cli_sel',nome); }catch(e){} renderCliente(); }
+let CLI_ENC=false; function cliToggleEnc(v){ CLI_ENC=!!v; cliDesenharLista(); }
 function cliSimSet(){
   const g=id=>{ const el=document.getElementById(id); return el?parseFloat(String(el.value).replace(',','.')):NaN; };
   const s=g('cliSimSaida'), j=g('cliSimRej'), m=g('cliSimMulta');
@@ -7276,12 +7297,13 @@ function cliSimSet(){
   renderCliente();
 }
 function cliDesenharLista(){
-  const box=document.getElementById('cliLista'); if(!box) return;
-  const ag=contractAggCached(); const st={}; ag.forEach(c=>st[c.cliente]=c.status);
-  const cor={Vigente:'#059669','Atenção':'#D97706',Encerrando:'#DC2626',Encerrado:'#94A3B8'};
-  const q=CLI_BUSCA.trim().toLowerCase();
-  const lista=cliListaClientes().filter(n=>!q||n.toLowerCase().includes(q));
-  box.innerHTML=lista.length?lista.map(n=>'<button class="cli-chip'+(n===CLI_SEL?' on':'')+'" data-c="'+esc(n)+'" onclick="cliSel(this.dataset.c)" title="'+esc(st[n]||'')+'"><i style="background:'+(cor[st[n]]||'#94A3B8')+'"></i>'+esc(n)+'</button>').join(''):'<span class="hint">Nenhum cliente encontrado.</span>';
+  const sel=document.getElementById('cliSelect'); if(!sel) return;
+  const st={}; contractAggCached().forEach(c=>st[c.cliente]=c.status);
+  const chk=document.getElementById('cliEnc'); if(chk) chk.checked=CLI_ENC;
+  // só clientes ativos (contrato não encerrado); o cliente já escolhido continua na lista mesmo que seja encerrado
+  const lista=cliListaClientes().filter(n=>CLI_ENC||st[n]!=='Encerrado'||n===CLI_SEL);
+  sel.innerHTML='<option value="">Selecione um cliente…</option>'+lista.map(n=>'<option value="'+esc(n)+'"'+(n===CLI_SEL?' selected':'')+'>'+esc(n)+(st[n]?' — '+esc(st[n]):'')+'</option>').join('');
+  sel.value=lista.includes(CLI_SEL)?CLI_SEL:'';
 }
 /* Reúne TODOS os números de um cliente (usado pela tela e pela exportação — a mesma fonte para os dois) */
 function cliDados(nome){
@@ -7290,14 +7312,19 @@ function cliDados(nome){
   const ult=fat.length?fat[fat.length-1]:null;
   const c=contractAggCached().find(x=>x.cliente===nome)||null;
   const t=totals(rows);
-  const mensal=rows.filter(r=>r.rb>0||r.custoTotal>0).map(r=>({
+  const mensalRaw=rows.filter(r=>r.rb>0||r.custoTotal>0).map(r=>({
     ano:r.ano,mesNum:r.mesNum,comp:_cliMM(r),parcela:r.parcela||0,nf:(r.parcela>0&&r.nf&&!/^0+$/.test(String(r.nf)))?String(r.nf):'',pedido:(r.parcela>0&&r.pedido&&!/^0+$/.test(String(r.pedido)))?String(r.pedido):'',
-    rb:r.rb||0,rl:r.rl||0,imp:(r.rb||0)-(r.rl||0),custo:r.custoTotal||0,lucro:(r.rl||0)-(r.custoTotal||0),exames:r.qtdeExames||0,sup:r.sup||{},ref:r}));
+    rb:r.rb||0,rl:r.rl||0,imp:(r.rb||0)-(r.rl||0),custo:r.custoTotal||0,lucro:(r.rl||0)-(r.custoTotal||0),exames:r.qtdeExames||0,sup:Object.assign({},r.sup||{}),ref:r}));
+  // linha só de custo (ex.: rateio lançado na linha da base) + linha de faturamento do mesmo mês/parcela viram uma só
+  const mensal=[]; mensalRaw.forEach(m=>{ if(m.rb===0&&m.custo>0){ const t=mensalRaw.find(x=>x!==m&&x.ano===m.ano&&x.mesNum===m.mesNum&&x.parcela===m.parcela&&x.rb>0); if(t){ t.custo+=m.custo; t.lucro=t.rl-t.custo; Object.keys(m.sup).forEach(k=>{ t.sup[k]=(t.sup[k]||0)+m.sup[k]; }); t.exames+=m.exames; return; } } mensal.push(m); });
   // fornecedores
   const rat={}; RATEIOS.filter(x=>x.status==='ativo').forEach(rt=>{ const it=(rt.itens||[]).find(i=>i.cliente===nome); if(it) rat[rt.key]={pct:it.pct,vig:rt.vigIni,n:(rt.itens||[]).length,forn:rt.forn,serv:rt.serv}; });
   const nomesSup=[]; mensal.forEach(m=>Object.keys(m.sup).forEach(k=>{ if(m.sup[k]&&!nomesSup.includes(k)) nomesSup.push(k); }));
   const comCusto=mensal.filter(m=>m.custo>0);
-  const ult3=comCusto.filter(m=>m.parcela>0).slice(-3);
+  const _cs=mensal.filter(m=>m.parcela>0&&m.rb>0&&m.custo>0).map(m=>m.custo).sort((x,y)=>x-y); const _med=_cs.length?_cs[Math.floor(_cs.length/2)]:0;
+  const fullM=mensal.filter(m=>m.parcela>0&&m.rb>0&&m.custo>0.25*_med); /* ignora mês aberto com só um pedaço dos custos lançados */
+  const refC=fullM.length?fullM[fullM.length-1]:null; // último mês com faturamento E custos lançados
+  const ult3=fullM.slice(-3);
   const totCusto=mensal.reduce((s,m)=>s+m.custo,0);
   const forn=nomesSup.map(k=>{
     const tot=mensal.reduce((s,m)=>s+(m.sup[k]||0),0);
@@ -7305,8 +7332,13 @@ function cliDados(nome){
     const med3=ult3.length?ult3.reduce((s,m)=>s+(m.sup[k]||0),0)/ult3.length:0;
     const rr=rat[k]; const isAg=(k==='AGFA-OPEX'||k==='AGFA-CAPEX');
     const tipo=isAg?(k==='AGFA-CAPEX'?'AGFA — investimento (CAPEX)':'AGFA — contrato (OPEX)'):(rr?(rr.pct>=99.99?'Dedicado (100% do cliente)':'Compartilhado (rateio)'):'Direto ao cliente (sem rateio)');
+    const com=mensal.filter(m=>(m.sup[k]||0)>0); const pri=com[0], ulc=com[com.length-1];
+    const kRef=refC?_cliChave(refC.ref):0;
+    const ativo=com.some(m=>m.parcela>0&&_cliChave(m.ref)>=kRef-2);
+    const cat=k==='AGFA-CAPEX'?'sunk':(isAg?'agfa':(rr?(rr.pct>=99.99?'ded':'comp'):'dir'));
+    const acao=k==='AGFA-CAPEX'?'SEM AÇÃO':(!ativo?'SEM AÇÃO':(cat==='ded'?'CANCELAR':(cat==='agfa'?'NEGOCIAR AGFA':(cat==='comp'?'REDISTRIBUIR':'CONFIRMAR E CANCELAR'))));
     return {nome:k,total:tot,pctCusto:totCusto?tot/totCusto:0,meses,med3,max:Math.max(0,...mensal.map(m=>m.sup[k]||0)),tipo,pct:rr?rr.pct:null,vig:rr?rr.vig:'',
-      cat:isAg?'agfa':(rr?(rr.pct>=99.99?'ded':'comp'):'dir')};
+      cat,ativo,acao,primParc:pri?pri.parcela:null,primComp:pri?pri.comp:'',ultParc:ulc?ulc.parcela:null,ultComp:ulc?ulc.comp:'',ultValor:ulc?ulc.sup[k]:0};
   }).sort((a,b)=>b.total-a.total);
   // contrato / projeção
   const prazo=c&&c.prazo>0?c.prazo:0; const rolling=!!(c&&c.rolling);
@@ -7329,7 +7361,7 @@ function cliDados(nome){
   // projeção das parcelas restantes (premissas: último valor faturado, reajuste informado, custos = média 3 meses)
   const proj=[];
   if(ult&&rest>0){
-    const aliq=ult.rb?ult.rl/ult.rb:1; const agfaM=(ult.sup||{})['AGFA-OPEX']||0;
+    const aliq=ult.rb?ult.rl/ult.rb:1; const agfaM=refC?(refC.sup['AGFA-OPEX']||0):0;
     const med3out=ult3.length?ult3.reduce((s,m)=>s+m.custo-(m.sup['AGFA-OPEX']||0)-(m.sup['AGFA-CAPEX']||0),0)/ult3.length:0;
     let rb=ult.rb;
     for(let i=1;i<=rest;i++){
@@ -7341,7 +7373,14 @@ function cliDados(nome){
   const ratLanc=RATEIO_LANC.filter(l=>(l.itens||[]).some(i=>i.cliente===nome&&(i.valor>0||i.pct>0))).sort((a,b)=>(a.ano*12+a.mes)-(b.ano*12+b.mes)).map(l=>{ const it=l.itens.find(i=>i.cliente===nome); return {comp:String(l.mes).padStart(2,'0')+'/'+l.ano,forn:l.forn,serv:l.serv,nf:l.nf||'',total:l.valorBRL!=null?l.valorBRL:l.valor,pct:it.pct,valor:it.valor}; });
   const eqUso=EQUINIX_USO.filter(x=>x.cliente===nome), eqItem=EQUINIX_ITEM.filter(x=>x.cliente===nome);
   const exames=mensal.filter(m=>m.exames>0).map(m=>{ const r=m.ref; const fq=r.franquiaAnual||0; return {comp:m.comp,qtde:m.exames,acum:r.examesAcum||0,franq:fq,pct:fq?(r.examesAcum||0)/fq:0,saldo:fq-(r.examesAcum||0),status:r.statusFranq||''}; });
-  return {nome,rows,fat,ult,c,t,mensal,forn,rat,prazo,rolling,parcAtual,rest,fim,prim,proj,ag,lancAg,ratLanc,eqUso,eqItem,exames,ult3,mesReaj,rc};
+  return {nome,refC,rows,fat,ult,c,t,mensal,forn,rat,prazo,rolling,parcAtual,rest,fim,prim,proj,ag,lancAg,ratLanc,eqUso,eqItem,exames,ult3,mesReaj,rc};
+}
+function cliDecisao(D,S){
+  const at=D.forn.filter(f=>f.ativo&&f.cat!=='sunk');
+  const sum=c=>at.filter(f=>f.cat===c).reduce((x,f)=>x+f.med3,0);
+  const ded=sum('ded'), dir=sum('dir'), comp=sum('comp');
+  const agM=D.refC?(D.refC.sup['AGFA-OPEX']||0):0; const rlMes=D.ult?D.ult.rl:0;
+  return {ded,dir,comp,agM,rlMes,cessa:ded+dir,fica:agM+comp,pos:-(agM+comp),hoje:rlMes-(ded+dir+comp+agM)};
 }
 /* Simulador de rescisão: parcelas restantes viram perda de receita; custos que ficam dependem do tipo */
 function cliSimular(D){
@@ -7350,8 +7389,8 @@ function cliSimular(D){
   const p=D.proj.filter(x=>x.parcela>saida);
   const rb=p.reduce((s,x)=>s+x.rb,0), rl=p.reduce((s,x)=>s+x.rl,0), outros=p.reduce((s,x)=>s+x.outros,0), res=p.reduce((s,x)=>s+x.res,0);
   // AGFA: OPEX do cliente continua até o fim do contrato AGFA (limitado ao prazo de cada contrato)
-  const agOpex=D.ag.filter(a=>a.tipo==='OPEX'); const maxRest=agOpex.length?Math.max(...agOpex.map(a=>a.restantes)):(D.ult&&(D.ult.sup||{})['AGFA-OPEX']?D.rest:0);
-  const agM=D.ult?((D.ult.sup||{})['AGFA-OPEX']||0):0;
+  const agMx=D.refC?(D.refC.sup['AGFA-OPEX']||0):0; const agOpex=D.ag.filter(a=>a.tipo==='OPEX'); const maxRest=agOpex.length?Math.max(...agOpex.map(a=>a.restantes)):(agMx>0?D.rest:0);
+  const agM=D.refC?(D.refC.sup['AGFA-OPEX']||0):0;
   const agRem=agM*Math.max(0,maxRest-(saida-D.parcAtual));
   const n=p.length;
   const med=cat=>D.forn.filter(f=>f.cat===cat).reduce((s,f)=>s+f.med3,0)*n;
@@ -7364,105 +7403,136 @@ function renderCliente(){
   if(CH.cliChart){ try{CH.cliChart.dispose();}catch(e){} delete CH.cliChart; }
   const hint=document.getElementById('cliHint');
   if(!CLI_SEL||!cliListaClientes().includes(CLI_SEL)){
-    if(hint) hint.textContent='Clique em um cliente abaixo para ver faturamento, parcelas, custos e tudo o que se refere a ele.';
-    corpo.innerHTML='<div class="banner"><span>&#8505;</span><div>Escolha um cliente na lista acima.</div></div>'; return;
+    CLI_SEL='';
+    if(hint) hint.textContent='Escolha um cliente no filtro acima para ver o que cancelar, quanto custa e o que muda.';
+    corpo.innerHTML='<div class="banner"><span>&#8505;</span><div>Escolha um cliente no filtro acima.</div></div>'; return;
   }
-  const D=cliDados(CLI_SEL); const S=cliSimular(D);
-  if(hint) hint.textContent=CLI_SEL+' · base até '+(D.ult?_cliMM(D.ult):'—')+' · valores em R$ completos';
+  const D=cliDados(CLI_SEL); const S=cliSimular(D); const X=cliDecisao(D,S);
+  if(hint) hint.textContent=CLI_SEL+' · dados até '+(D.refC?D.refC.comp:(D.ult?_cliMM(D.ult):'—'))+' · valores em R$ completos';
   const R=v=>fBRL(v), N=v=>(v||0).toLocaleString('pt-BR');
   const td=(v,cls)=>'<td'+(cls?' style="text-align:right"':'')+'>'+v+'</td>';
   const tdb=v=>'<td style="text-align:right;font-weight:700">'+v+'</td>';
   const neg=v=>v<0?'color:var(--neg)':'';
   const sec=(t,info)=>'<div class="sec-title" style="margin-top:22px"><h2>'+t+'</h2>'+(info?'<span class="info-icon" onclick="toggleInfo(this,event)">i<span class="info-popover">'+info+'</span></span>':'')+'<div class="rule"></div></div>';
-  const tbl=(head,body,foot,mh)=>'<div class="tbl-wrap" style="max-height:'+(mh||460)+'px;overflow:auto"><table><thead><tr>'+head.map((h,i)=>'<th'+(h[0]==='>'?' style="text-align:right"':'')+'>'+esc(h.replace(/^>/,''))+'</th>').join('')+'</tr></thead><tbody>'+body+'</tbody>'+(foot?'<tfoot>'+foot+'</tfoot>':'')+'</table></div>';
+  const tbl=(head,body,foot,mh)=>'<div class="tbl-wrap" style="max-height:'+(mh||460)+'px;overflow:auto"><table><thead><tr>'+head.map(h=>'<th'+(h[0]==='>'?' style="text-align:right"':'')+'>'+esc(h.replace(/^>/,''))+'</th>').join('')+'</tr></thead><tbody>'+body+'</tbody>'+(foot?'<tfoot>'+foot+'</tfoot>':'')+'</table></div>';
   const kpi=(l,v,sub,cls)=>'<div class="kpi '+(cls||'k-navy')+'"><div class="accent"></div><div class="lbl">'+l+'</div><div class="val">'+v+'</div>'+(sub?'<div class="sub">'+sub+'</div>':'')+'</div>';
   const st=(l,v)=>'<div class="fc-st"><div class="l">'+l+'</div><div class="v">'+v+'</div></div>';
+  const det=(t,inner,aberto)=>'<details class="cli-det"'+(aberto?' open':'')+' ontoggle="cliChartResize()"><summary>'+t+'</summary><div class="cli-det-b">'+inner+'</div></details>';
   const t=D.t, ult=D.ult, c=D.c, info=ult||D.rows[D.rows.length-1]||{};
+  const multaF=cliMultasTotal(CLI_SEL);
   let h='';
-  // 1. Contrato
+
+  /* ============ 1. DECISÃO ============ */
+  h+=sec('Se o contrato for cancelado','Estimativas por mês com base na média dos últimos 3 meses com custos lançados. Dedicados e "confirmar" deixam de existir com o cancelamento; AGFA e compartilhados tendem a continuar.')+'<div class="kpi-grid">'+
+    kpi('PARCELAS RESTANTES',D.rolling?'contínuo':String(S.n),D.fim?'contrato vai até '+D.fim+' · parcela '+D.parcAtual+' de '+(D.prazo||'—'):'')+
+    kpi('RECEITA LÍQUIDA PERDIDA POR MÊS',R(X.rlMes),'total restante: '+R(S.rl),'k-neg')+
+    kpi('CUSTO MENSAL QUE CESSA',R(X.cessa),'dedicados '+R(X.ded)+' · a confirmar '+R(X.dir),'k-pos')+
+    kpi('CUSTO MENSAL QUE PERMANECE',R(X.fica),'AGFA '+R(X.agM)+' · compartilhados '+R(X.comp),'k-cost')+
+    kpi('RESULTADO MENSAL APÓS A SAÍDA',R(X.pos),'hoje: '+R(X.hoje)+' por mês',X.pos<0?'k-neg':'k-pos')+
+    kpi('AGFA A PAGAR ATÉ O FIM DO CONTRATO',R(S.agRem),'compromisso mais pesado: negociar','k-cost')+
+    kpi('COMPARTILHADOS ATÉ O FIM',R(X.comp*S.n),'redistribuídos aos outros clientes','k-cost')+
+    kpi('MULTAS INFORMADAS (FORNECEDORES)',R(multaF),'preencha na tabela abaixo','k-navy')+'</div>';
+
+  /* ============ 2. FORNECEDORES ============ */
+  const fl=D.forn.slice().sort((a,b)=>(CLI_ACAO[a.acao].ord-CLI_ACAO[b.acao].ord)||(b.med3-a.med3)||(b.total-a.total));
+  const mM=CLI_MULTAS[CLI_SEL]||{};
+  let bf='';
+  fl.forEach(f=>{
+    const ac=CLI_ACAO[f.acao]; const ate=f.acao==='SEM AÇÃO'?0:(f.cat==='agfa'?S.agRem:f.med3*S.n);
+    const parc=f.primParc==null?'—':((f.primParc>0?f.primParc:'impl.')+' a '+f.ultParc+' ('+f.meses+' meses)');
+    const mi=(f.acao==='SEM AÇÃO')?'—':'<input type="number" step="0.01" min="0" data-f="'+esc(f.nome)+'" value="'+(mM[f.nome]||'')+'" placeholder="0,00" onchange="cliMultaSet(this)" style="width:110px;text-align:right">';
+    bf+='<tr'+(f.acao==='SEM AÇÃO'?' style="opacity:.62"':'')+'><td><span class="chip" style="background:'+ac.cor+';color:#fff;font-weight:700;white-space:nowrap">'+f.acao+'</span></td><td style="font-weight:700">'+esc(f.nome)+'</td><td style="min-width:250px;white-space:normal">'+esc(cliTexto(f,D))+'</td>'+
+      td(f.acao==='SEM AÇÃO'?'—':R(f.med3),1)+td(f.pct!=null?f.pct.toLocaleString('pt-BR',{maximumFractionDigits:2})+'%':'—',1)+td(ate?R(ate):'—',1)+
+      '<td style="white-space:normal;min-width:190px">'+(f.primParc==null?'—':('parcelas '+parc+'<br><span style="color:var(--ink3)">último: parcela '+(f.ultParc>0?f.ultParc:'impl.')+' · '+f.ultComp+' · '+R(f.ultValor)+'</span>'))+'</td><td style="text-align:right">'+mi+'</td></tr>';
+  });
+  const ativosCnt=fl.filter(f=>f.acao!=='SEM AÇÃO').length;
+  h+=sec('Fornecedores: o que fazer com cada um ('+ativosCnt+' com ação)','Ordenado por prioridade. "Custo até o fim" = custo mensal médio × parcelas restantes (AGFA: parcelas restantes do contrato AGFA). Multa: campo para você anotar o valor informado pelo fornecedor (fica salvo só neste navegador).')+
+    tbl(['Ação','Fornecedor','O que fazer','>Custo mensal (média 3 meses)','>% rateio','>Custo até o fim do contrato','Em que parcelas o custo apareceu','>Multa informada (R$)'],bf,
+      '<tr style="font-weight:800"><td colspan="3">TOTAL (fornecedores com ação)</td>'+tdb(R(fl.filter(f=>f.acao!=='SEM AÇÃO').reduce((x,f)=>x+f.med3,0)))+'<td></td>'+tdb(R(fl.filter(f=>f.acao!=='SEM AÇÃO').reduce((x,f)=>x+(f.cat==='agfa'?S.agRem:f.med3*S.n),0)))+'<td></td>'+tdb(R(multaF))+'</tr>',620);
+
+  /* texto pronto para a gerência */
+  const lst=(a)=>fl.filter(f=>f.acao===a).map(f=>f.nome);
+  const par=[];
+  if(lst('CANCELAR').length) par.push('<b>Cancelar</b> (dedicados ao cliente): '+lst('CANCELAR').map(esc).join(', ')+' — economia de '+R(X.ded)+' por mês.');
+  if(lst('CONFIRMAR E CANCELAR').length) par.push('<b>Confirmar e cancelar</b> (custo direto sem rateio): '+lst('CONFIRMAR E CANCELAR').map(esc).join(', ')+' — '+R(X.dir)+' por mês.');
+  if(lst('NEGOCIAR AGFA').length){ const a=D.ag.find(x=>x.tipo==='OPEX'); par.push('<b>Negociar com a AGFA</b>: '+(a?'contrato '+esc(a.servico)+' com '+a.restantes+' parcelas restantes até '+a.fim+', cerca de '+R(S.agRem)+' ('+R(X.agM)+' por mês). ':'')+'Verificar multa, cessão a outro cliente ou redução.'); }
+  if(lst('REDISTRIBUIR').length) par.push('<b>Redistribuir ou reduzir</b> (compartilhados): '+lst('REDISTRIBUIR').map(esc).join(', ')+' — '+R(X.comp)+' por mês que passam aos demais clientes, salvo redução do serviço.');
+  par.push('<b>Impacto:</b> deixam de entrar '+R(X.rlMes)+' de receita líquida por mês ('+S.n+' parcelas, '+R(S.rl)+'). Após a saída o resultado mensal estimado é de '+R(X.pos)+' (hoje '+R(X.hoje)+').'+(multaF>0?' Multas informadas pelos fornecedores: '+R(multaF)+'.':' Multas ainda não informadas.'));
+  h+='<div class="panel" style="margin-top:14px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px"><b style="color:var(--navy)">Resumo para a gerência</b><button id="cliTxtBtn" class="mini-btn" onclick="cliCopiar(\'cliTxt\')" data-html2canvas-ignore="true">Copiar texto</button></div><div id="cliTxt" style="font-size:13.5px;line-height:1.6">'+par.map(p=>'<p style="margin:0 0 8px">'+p+'</p>').join('')+'</div></div>';
+
+  /* ============ 3. CONTRATO + SIMULADOR ============ */
   const reajTxt=D.mesReaj?['','janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'][D.mesReaj]:'—';
   h+=sec('Contrato')+'<div class="panel"><div class="fc-grid">'+
-    st('Cliente',esc(CLI_SEL))+st('CNPJ',esc(info.cnpj||'—'))+st('Cidade/UF',esc(info.cidadeuf||'—'))+st('Contrato nº',esc((c&&c.contrato)||info.contrato||'—'))+
-    st('Tipo',esc((c&&c.tipo)||info.tipo||'—'))+st('Resp. comercial',esc(info.respCom||'—'))+st('Status',esc(c?c.status:'—'))+
-    st('Início (parcela 1)',D.prim?D.prim.comp:'—')+st('Parcela atual / prazo',D.parcAtual+' / '+(D.prazo||'—'))+st('Parcelas restantes',D.rolling?'contínuo':(D.rest||0))+
-    st('Fim previsto',D.rolling?'contrato contínuo':(D.fim||'—'))+st('Mês de reajuste',reajTxt)+st('Franquia anual (exames)',info.franquiaAnual?N(info.franquiaAnual):'—')+'</div></div>';
-  // 2. KPIs
-  const restRL=D.proj.reduce((s,x)=>s+x.rl,0), restRB=D.proj.reduce((s,x)=>s+x.rb,0);
-  h+=sec('Resumo financeiro (histórico completo)','Lucro = Receita Líquida − Custos (critério contábil do dashboard). Inclui custos de implantação anteriores ao 1º faturamento.')+'<div class="kpi-grid">'+
-    kpi('RECEITA BRUTA',R(t.rb),D.fat.length+' parcelas faturadas')+kpi('RECEITA LÍQUIDA',R(t.rl),'impostos: '+R(t.impostos))+
-    kpi('CUSTOS',R(t.custo),'todos os fornecedores','k-cost')+kpi('LUCRO ACUMULADO',R(t.lucroBruto),'margem '+fPct(t.margemBruta),t.lucroBruto<0?'k-neg':'k-pos')+
-    kpi('RECEITA BRUTA MENSAL ATUAL',ult?R(ult.rb):'—',ult?_cliMM(ult):'')+kpi('LUCRO DO ÚLTIMO MÊS',ult?R(ult.rl-ult.custoTotal):'—',ult?'margem '+fPct(ult.rl?(ult.rl-ult.custoTotal)/ult.rl:0):'')+
-    kpi('RECEITA LÍQUIDA RESTANTE (PROJEÇÃO)',R(restRL),D.proj.length+' parcelas restantes')+kpi('COMPROMISSO AGFA RESTANTE',R(S.agRem),'OPEX até o fim do contrato AGFA','k-cost')+'</div>';
-  // 3. Gráfico
-  h+=sec('Evolução mensal','A partir do 1º faturamento (custos de implantação ficam só nas tabelas, para não distorcer a escala).')+'<div class="panel"><div id="cliChart" class="chart" style="height:300px"></div></div>';
-  // 4. Faturamento mensal
+    st('Cliente',esc(CLI_SEL))+st('CNPJ',esc(info.cnpj||'—'))+st('Contrato nº',esc((c&&c.contrato)||info.contrato||'—'))+st('Status',esc(c?c.status:'—'))+
+    st('Início (parcela 1)',D.prim?D.prim.comp:'—')+st('Parcela atual / prazo',D.parcAtual+' / '+(D.prazo||'—'))+st('Parcelas restantes',D.rolling?'contínuo':(D.rest||0))+st('Fim previsto',D.rolling?'contrato contínuo':(D.fim||'—'))+
+    st('Mês de reajuste',reajTxt)+st('Valor mensal atual (bruto)',ult?R(ult.rb):'—')+st('Valor mensal atual (líquido)',ult?R(ult.rl):'—')+st('Franquia anual (exames)',info.franquiaAnual?N(info.franquiaAnual):'—')+'</div></div>';
+  const lin=(l,v,b)=>'<tr'+(b?' style="font-weight:800"':'')+'><td>'+l+'</td><td style="text-align:right;'+neg(v)+'">'+R(v)+'</td></tr>';
+  const c0=S.res, c1=-S.res, c2=-S.agRem, c3=-(S.agRem+S.comp);
+  h+=sec('Simulador de saída','Escolha a parcela em que o cliente sai. Ordem de grandeza para discussão: não considera renegociação com fornecedores nem revenda da capacidade.')+
+    '<div class="panel" style="display:flex;gap:14px;align-items:end;flex-wrap:wrap;margin-bottom:12px" data-html2canvas-ignore="true">'+
+    '<div class="fgroup"><label>Última parcela devida (entre '+S.saidaMin+' e '+S.saidaMax+')</label><input type="number" id="cliSimSaida" min="'+S.saidaMin+'" max="'+S.saidaMax+'" value="'+S.saida+'" onchange="cliSimSet()" style="width:150px"></div>'+
+    '<div class="fgroup"><label>Reajuste anual estimado (%)</label><input type="number" step="0.01" id="cliSimRej" value="'+((CLI_SIM.rej||0)*100)+'" onchange="cliSimSet()" style="width:150px"></div>'+
+    '<div class="fgroup"><label>Multa contratual do cliente (R$), se houver</label><input type="number" step="0.01" id="cliSimMulta" value="'+(CLI_SIM.multa||0)+'" onchange="cliSimSet()" style="width:180px"></div></div>'+
+    '<div class="tbl-wrap"><table><thead><tr><th>Indicador</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+
+    '<tr><td>Parcelas restantes após a saída</td><td style="text-align:right">'+S.n+'</td></tr>'+
+    lin('Receita bruta que deixa de ser faturada',S.rb)+lin('Receita líquida que deixa de ser faturada',S.rl)+
+    lin('Custo AGFA OPEX remanescente (contrato AGFA segue)',S.agRem)+lin('Custos compartilhados projetados (redistribuídos)',S.comp)+lin('Custos dedicados ao cliente projetados (cessam)',S.ded)+lin('Outros custos diretos projetados (a confirmar)',S.dir)+
+    lin('Multa contratual do cliente informada',S.multa)+lin('Multas de fornecedores informadas (soma)',multaF)+
+    '<tr style="background:var(--line2)"><td colspan="2"><b>Cenários sobre as parcelas restantes</b></td></tr>'+
+    lin('Cenário 0 — contrato mantido: resultado projetado',c0,1)+lin('Cenário 1 — saída e todos os custos cessam: resultado perdido',c1)+
+    lin('Cenário 2 — saída; AGFA permanece, demais custos cessam',c2)+lin('Cenário 3 — saída; AGFA e custos compartilhados permanecem',c3)+
+    lin('Impacto total do cenário 3 vs. contrato mantido (inclui multas informadas)',c3-c0-S.multa-multaF,1)+'</tbody></table></div>';
+
+  /* ============ 4. DETALHES (recolhidos) ============ */
+  h+=sec('Detalhes');
+  // faturamento mensal
   const tot={rb:0,imp:0,rl:0,custo:0,lucro:0,ex:0};
   let b=''; D.mensal.forEach(m=>{ tot.rb+=m.rb; tot.imp+=m.imp; tot.rl+=m.rl; tot.custo+=m.custo; tot.lucro+=m.lucro; tot.ex+=m.exames;
     b+='<tr><td>'+m.comp+'</td><td>'+(m.parcela||'<span style="color:var(--ink3)">implantação</span>')+'</td><td>'+esc(m.nf)+'</td><td>'+esc(m.pedido)+'</td>'+td(R(m.rb),1)+td(R(m.imp),1)+td(R(m.rl),1)+td(R(m.custo),1)+'<td style="text-align:right;'+neg(m.lucro)+'">'+R(m.lucro)+'</td>'+td(m.rl?fPct(m.lucro/m.rl):'—',1)+td(m.exames?N(m.exames):'—',1)+'</tr>'; });
   const foot='<tr style="font-weight:800"><td colspan="4">TOTAL</td>'+tdb(R(tot.rb))+tdb(R(tot.imp))+tdb(R(tot.rl))+tdb(R(tot.custo))+'<td style="text-align:right;font-weight:800;'+neg(tot.lucro)+'">'+R(tot.lucro)+'</td>'+tdb(tot.rl?fPct(tot.lucro/tot.rl):'—')+tdb(N(tot.ex))+'</tr>';
-  h+=sec('Faturamento mensal, custos e resultado','Uma linha por mês com faturamento ou custo. Parcela vazia = custo de implantação antes do 1º faturamento.')+tbl(['Competência','Parcela','NF','Pedido','>Receita bruta','>Impostos','>Receita líquida','>Custos','>Lucro','>Margem s/ RL','>Exames'],b,foot,520);
-  // 5. Parcelas restantes
+  h+=det('Faturamento: resumo e histórico mensal ('+D.fat.length+' parcelas faturadas · lucro acumulado '+R(t.lucroBruto)+')',
+    '<div class="kpi-grid" style="margin-bottom:14px">'+kpi('RECEITA BRUTA',R(t.rb),D.fat.length+' parcelas faturadas')+kpi('RECEITA LÍQUIDA',R(t.rl),'impostos: '+R(t.impostos))+kpi('CUSTOS',R(t.custo),'inclui implantação e CAPEX','k-cost')+kpi('LUCRO ACUMULADO',R(t.lucroBruto),'margem '+fPct(t.margemBruta)+((ult&&D.refC&&_cliMM(ult)!==D.refC.comp)?' · inclui '+_cliMM(ult)+' sem custos lançados':''),t.lucroBruto<0?'k-neg':'k-pos')+'</div>'+
+    '<div id="cliChart" class="chart" style="height:280px;margin-bottom:14px"></div>'+
+    tbl(['Competência','Parcela','NF','Pedido','>Receita bruta','>Impostos','>Receita líquida','>Custos','>Lucro','>Margem s/ RL','>Exames'],b,foot,520));
+  // parcelas restantes
   if(D.proj.length){
     let bp='', sp={rb:0,rl:0,ag:0,ou:0,rs:0}; D.proj.forEach(x=>{ sp.rb+=x.rb; sp.rl+=x.rl; sp.ag+=x.agfa; sp.ou+=x.outros; sp.rs+=x.res;
       bp+='<tr><td>'+x.parcela+'</td><td>'+x.comp+'</td>'+td(R(x.rb),1)+td(R(x.rl),1)+td(R(x.agfa),1)+td(R(x.outros),1)+'<td style="text-align:right;'+neg(x.res)+'">'+R(x.res)+'</td></tr>'; });
-    h+=sec('Parcelas restantes (projeção)','PROJEÇÃO: usa o último valor faturado, reajuste informado no simulador abaixo (padrão 0%) na competência de reajuste do cliente, custo AGFA OPEX do último mês e a média dos demais custos dos últimos 3 meses faturados.')+
-      tbl(['Parcela','Competência','>Receita bruta','>Receita líquida','>Custo AGFA OPEX','>Demais custos','>Resultado'],bp,'<tr style="font-weight:800"><td colspan="2">TOTAL</td>'+tdb(R(sp.rb))+tdb(R(sp.rl))+tdb(R(sp.ag))+tdb(R(sp.ou))+tdb(R(sp.rs))+'</tr>',420);
-  } else h+=sec('Parcelas restantes')+'<div class="banner"><span>&#8505;</span><div>'+(D.rolling?'Contrato contínuo (prazo rolante): sem fim previsto.':'Sem parcelas restantes ou prazo não cadastrado.')+'</div></div>';
-  // 6. Fornecedores — resumo
-  let bf=''; D.forn.forEach(f=>{ bf+='<tr><td>'+esc(f.nome)+'</td><td>'+esc(f.tipo)+'</td>'+td(R(f.total),1)+td(fPct(f.pctCusto),1)+td(f.meses,1)+td(R(f.med3),1)+td(R(f.max),1)+td(f.pct!=null?(f.pct.toLocaleString('pt-BR',{maximumFractionDigits:4})+'%'):'—',1)+'</tr>'; });
-  h+=sec('Custos por fornecedor','% rateio = participação atual do cliente no rateio cadastrado do fornecedor. Média 3 meses = últimos 3 meses faturados.')+
-    tbl(['Fornecedor','Tipo de custo','>Total acumulado','>% do custo','>Meses com custo','>Média 3 meses','>Maior mês','>% rateio'],bf,'<tr style="font-weight:800"><td colspan="2">TOTAL</td>'+tdb(R(D.forn.reduce((s,f)=>s+f.total,0)))+tdb('100%')+'<td></td><td></td><td></td><td></td></tr>',420);
-  // 7. Fornecedor x mês/parcela (matriz)
+    h+=det('Parcelas restantes (projeção): '+D.proj.length+' parcelas · receita líquida '+R(sp.rl),
+      '<p class="hint" style="margin:0 0 10px">PROJEÇÃO: último valor faturado, reajuste do simulador (padrão 0%) no mês de reajuste, custo AGFA OPEX do último mês com custos e média dos demais custos dos últimos 3 meses.</p>'+
+      tbl(['Parcela','Competência','>Receita bruta','>Receita líquida','>Custo AGFA OPEX','>Demais custos','>Resultado'],bp,'<tr style="font-weight:800"><td colspan="2">TOTAL</td>'+tdb(R(sp.rb))+tdb(R(sp.rl))+tdb(R(sp.ag))+tdb(R(sp.ou))+tdb(R(sp.rs))+'</tr>',420));
+  }
+  // fornecedores x parcela
   const cols=D.forn.map(f=>f.nome);
   let bm=''; D.mensal.filter(m=>m.custo>0).forEach(m=>{ bm+='<tr><td>'+m.comp+'</td><td>'+(m.parcela||'impl.')+'</td>'+cols.map(k=>td(m.sup[k]?R(m.sup[k]):'<span style="color:var(--ink3)">–</span>',1)).join('')+tdb(R(m.custo))+'</tr>'; });
-  h+=sec('Em que parcela cada custo caiu','Cada linha é uma parcela/competência; as colunas são os fornecedores. "impl." = custo de implantação antes da parcela 1.')+
-    tbl(['Competência','Parcela'].concat(cols.map(k=>'>'+k),['>Total']),bm,'<tr style="font-weight:800"><td colspan="2">TOTAL</td>'+cols.map(k=>tdb(R(D.forn.find(f=>f.nome===k).total))).join('')+tdb(R(D.forn.reduce((s,f)=>s+f.total,0)))+'</tr>',520);
-  // 8. AGFA
+  h+=det('Em que parcela cada custo caiu (fornecedor × parcela)',
+    tbl(['Competência','Parcela'].concat(cols.map(k=>'>'+k),['>Total']),bm,'<tr style="font-weight:800"><td colspan="2">TOTAL</td>'+cols.map(k=>tdb(R(D.forn.find(f=>f.nome===k).total))).join('')+tdb(R(D.forn.reduce((s,f)=>s+f.total,0)))+'</tr>',520));
+  // acumulado por fornecedor
+  let bt=''; D.forn.forEach(f=>{ bt+='<tr><td>'+esc(f.nome)+'</td><td>'+esc(f.tipo)+'</td>'+td(R(f.total),1)+td(fPct(f.pctCusto),1)+td(f.meses,1)+td(R(f.max),1)+'</tr>'; });
+  h+=det('Custo acumulado por fornecedor',tbl(['Fornecedor','Tipo de custo','>Total acumulado','>% do custo','>Meses com custo','>Maior mês'],bt,'<tr style="font-weight:800"><td colspan="2">TOTAL</td>'+tdb(R(D.forn.reduce((s,f)=>s+f.total,0)))+tdb('100%')+'<td></td><td></td></tr>',420));
+  // AGFA
   if(D.ag.length){
     let ba=''; D.ag.forEach(a=>{ ba+='<tr><td>'+esc(a.servico)+'</td><td>'+esc(a.tipo)+'</td><td>'+a.inicio+'</td><td>'+a.fim+'</td>'+td(a.atual+' / '+a.total,1)+td(a.restantes,1)+td(a.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})+' USD',1)+td(a.remUSD.toLocaleString('pt-BR',{minimumFractionDigits:2})+' USD',1)+td(a.remBRLaprox!=null?R(a.remBRLaprox):'—',1)+'</tr>'; });
-    h+=sec('Contratos AGFA do cliente','Valor remanescente = parcelas restantes × valor lançado (USD). Em R$ (aprox.) = USD × PTAX configurada × (1 + IOF 11,11%), mesma fórmula do custo AGFA do dashboard.')+
-      tbl(['Serviço','Tipo','Início','Fim','>Parcela atual/total','>Restantes','>Valor mensal lançado','>Remanescente (USD)','>Remanescente (R$ aprox.)'],ba,'',300);
+    h+=det('Contratos AGFA do cliente',tbl(['Serviço','Tipo','Início','Fim','>Parcela atual/total','>Restantes','>Valor mensal lançado','>Remanescente (USD)','>Remanescente (R$ aprox.)'],ba,'',300)+'<p class="hint" style="margin:8px 0 0">Em R$ (aprox.) = USD × PTAX configurada × (1 + IOF 11,11%).</p>');
   }
-  // 9. Rateios
+  // rateios
   const ratKeys=Object.keys(D.rat);
   if(ratKeys.length){
     let br=''; ratKeys.sort().forEach(k=>{ const r=D.rat[k]; br+='<tr><td>'+esc(r.forn)+'</td><td>'+esc(r.serv)+'</td><td>'+esc(r.vig)+'</td>'+td(r.pct.toLocaleString('pt-BR',{maximumFractionDigits:4})+'%',1)+td(r.n,1)+'</tr>'; });
-    h+=sec('Rateios vigentes do cliente','Se o cliente sair, o percentual dele é redistribuído entre os demais participantes (o custo do fornecedor não desaparece, a menos que o contrato seja reduzido).')+tbl(['Fornecedor','Serviço','Vigência desde','>% do cliente','>Participantes'],br,'',300);
+    let extra=''; if(D.ratLanc.length){ let bl=''; D.ratLanc.forEach(l=>{ bl+='<tr><td>'+l.comp+'</td><td>'+esc(l.forn)+'</td><td>'+esc(l.serv)+'</td><td>'+esc(l.nf||'—')+'</td>'+td(R(l.total),1)+td(l.pct.toLocaleString('pt-BR',{maximumFractionDigits:4})+'%',1)+td(R(l.valor),1)+'</tr>'; }); extra='<div style="height:12px"></div>'+tbl(['Competência','Fornecedor','Serviço','NF','>Valor total','>% do cliente','>Valor do cliente'],bl,'',300); }
+    h+=det('Rateios vigentes do cliente',tbl(['Fornecedor','Serviço','Vigência desde','>% do cliente','>Participantes'],br,'',300)+extra);
   }
-  if(D.ratLanc.length){
-    let bl=''; D.ratLanc.forEach(l=>{ bl+='<tr><td>'+l.comp+'</td><td>'+esc(l.forn)+'</td><td>'+esc(l.serv)+'</td><td>'+esc(l.nf||'—')+'</td>'+td(R(l.total),1)+td(l.pct.toLocaleString('pt-BR',{maximumFractionDigits:4})+'%',1)+td(R(l.valor),1)+'</tr>'; });
-    h+=sec('Lançamentos de rateio com parcela do cliente')+tbl(['Competência','Fornecedor','Serviço','NF','>Valor total','>% do cliente','>Valor do cliente'],bl,'',300);
-  }
-  // 10. Exames / franquia
+  // exames
   if(D.exames.length){
     let be=''; D.exames.forEach(e=>{ be+='<tr><td>'+e.comp+'</td>'+td(N(e.qtde),1)+td(N(e.acum),1)+td(N(e.franq),1)+td(fPct(e.pct),1)+'<td style="text-align:right;'+neg(e.saldo)+'">'+N(e.saldo)+'</td><td>'+esc(e.status)+'</td></tr>'; });
-    h+=sec('Exames e franquia','Acumulado conforme o ciclo de franquia cadastrado para o cliente.')+tbl(['Competência','>Exames no mês','>Acumulado no ciclo','>Franquia anual','>% da franquia','>Saldo','Status'],be,'',360);
+    h+=det('Exames e franquia',tbl(['Competência','>Exames no mês','>Acumulado no ciclo','>Franquia anual','>% da franquia','>Saldo','Status'],be,'',360));
   }
   if(D.eqUso.length||D.eqItem.length){
     let bq=''; D.eqUso.forEach(u=>{ bq+='<tr><td>'+String(u.mesNum||u.mes).split(' - ')[0].padStart(2,'0')+'/'+u.ano+'</td><td>Uso</td>'+td('iData frente '+N(u.idataFrente)+' · Deep fundo '+N(u.deepFundo)+' · franquia '+N(u.franquiaExames),0)+'</tr>'; });
     D.eqItem.forEach(u=>{ bq+='<tr><td>'+String(u.mesNum||u.mes).split(' - ')[0].padStart(2,'0')+'/'+u.ano+'</td><td>'+esc(u.tipo)+'</td>'+td(R(u.valor)+' — '+esc(u.servico||''),0)+'</tr>'; });
-    h+=sec('Equinix — itens e uso do cliente')+tbl(['Competência','Tipo','Detalhe'],bq,'',260);
+    h+=det('Equinix: itens e uso do cliente',tbl(['Competência','Tipo','Detalhe'],bq,'',260));
   }
-  // 11. Simulador de rescisão
-  const ced=S.ded, cb=S.comp;
-  const lin=(l,v,b)=>'<tr'+(b?' style="font-weight:800"':'')+'><td>'+l+'</td><td style="text-align:right;'+neg(v)+'">'+R(v)+'</td></tr>';
-  const c0=S.res, c1=-S.res, c2=-S.agRem, c3=-(S.agRem+S.comp);
-  h+=sec('Simulador de rescisão','Ordem de grandeza para discussão: desconsidera renegociação com fornecedores e revenda da capacidade. Informe a parcela de saída, o reajuste anual estimado e a multa (use ponto ou vírgula).')+
-    '<div class="panel" style="display:flex;gap:14px;align-items:end;flex-wrap:wrap;margin-bottom:12px" data-html2canvas-ignore="true">'+
-    '<div class="fgroup"><label>Última parcela devida (entre '+S.saidaMin+' e '+S.saidaMax+')</label><input type="number" id="cliSimSaida" min="'+S.saidaMin+'" max="'+S.saidaMax+'" value="'+S.saida+'" onchange="cliSimSet()" style="width:150px"></div>'+
-    '<div class="fgroup"><label>Reajuste anual estimado (%)</label><input type="number" step="0.01" id="cliSimRej" value="'+((CLI_SIM.rej||0)*100)+'" onchange="cliSimSet()" style="width:150px"></div>'+
-    '<div class="fgroup"><label>Multa / encargos rescisórios (R$)</label><input type="number" step="0.01" id="cliSimMulta" value="'+(CLI_SIM.multa||0)+'" onchange="cliSimSet()" style="width:180px"></div></div>'+
-    '<div class="tbl-wrap"><table><thead><tr><th>Indicador</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+
-    '<tr><td>Parcelas restantes após a saída</td><td style="text-align:right">'+S.n+'</td></tr>'+
-    lin('Receita bruta que deixa de ser faturada',S.rb)+lin('Receita líquida que deixa de ser faturada',S.rl)+
-    lin('Custo AGFA OPEX remanescente (contrato AGFA segue)',S.agRem)+lin('Custos compartilhados projetados (rateio — são redistribuídos)',S.comp)+lin('Custos dedicados ao cliente projetados (cessam com o contrato)',S.ded)+lin('Outros custos diretos projetados',S.dir)+
-    lin('Multa / encargos informados',S.multa)+
-    '<tr style="background:var(--line2)"><td colspan="2"><b>Cenários sobre as parcelas restantes</b></td></tr>'+
-    lin('Cenário 0 — contrato mantido: resultado projetado',c0,1)+lin('Cenário 1 — saída e todos os custos cessam: resultado perdido',c1)+
-    lin('Cenário 2 — saída; AGFA permanece, demais custos cessam',c2)+lin('Cenário 3 — saída; AGFA e custos compartilhados permanecem',c3)+
-    lin('Impacto total do cenário 3 vs. contrato mantido (inclui multa)',c3-c0-S.multa,1)+'</tbody></table></div>';
   corpo.innerHTML=h;
-  // gráfico
   try{
     const ms=D.mensal.filter(m=>m.parcela>0||m.rb>0); const el=document.getElementById('cliChart'); if(el&&ms.length){
       const cc=_buildCC();
@@ -7482,6 +7552,7 @@ function cliExportar(){
   salvarTabela(mensal,nomeBase,{buildLocalWb:()=>{
     const wb=XLSX.utils.book_new(); const add=(n,rows)=>{ if(rows&&rows.length) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),n); };
     const c=D.c||{}; const inf=D.ult||D.rows[D.rows.length-1]||{};
+    add('Fornecedores - ação',D.forn.slice().sort((a,b)=>(CLI_ACAO[a.acao].ord-CLI_ACAO[b.acao].ord)||(b.med3-a.med3)).map(f=>({'Ação':f.acao,'Fornecedor':f.nome,'O que fazer':cliTexto(f,D),'Custo mensal (média 3 meses)':f.acao==='SEM AÇÃO'?0:f.med3,'% rateio':f.pct==null?'':f.pct,'Custo até o fim do contrato':f.acao==='SEM AÇÃO'?0:(f.cat==='agfa'?S.agRem:f.med3*S.n),'Último custo (competência)':f.ultComp,'Último custo (parcela)':f.ultParc,'Primeira parcela':f.primParc,'Multa informada (R$)':(CLI_MULTAS[CLI_SEL]||{})[f.nome]||'','Aviso prévio (dias)':'','Fim do contrato do fornecedor':'','Contato / status':''})));
     add('Contrato',[{'Cliente':CLI_SEL,'CNPJ':inf.cnpj||'','Contrato':c.contrato||inf.contrato||'','Tipo':c.tipo||inf.tipo||'','Início':D.prim?D.prim.comp:'','Parcela atual':D.parcAtual,'Prazo':D.prazo,'Restantes':D.rest,'Fim previsto':D.fim,'Status':c.status||''}]);
     add('Faturamento',mensal);
     add('Parcelas restantes (proj.)',D.proj.map(x=>({'Parcela':x.parcela,'Competência':x.comp,'Receita bruta':x.rb,'Receita líquida':x.rl,'Custo AGFA OPEX':x.agfa,'Demais custos':x.outros,'Resultado':x.res})));
@@ -7491,7 +7562,7 @@ function cliExportar(){
     add('AGFA',D.ag.map(a=>({'Serviço':a.servico,'Tipo':a.tipo,'Início':a.inicio,'Fim':a.fim,'Parcela atual':a.atual,'Total':a.total,'Restantes':a.restantes,'Valor mensal USD':a.valor,'Remanescente USD':a.remUSD,'Remanescente R$ aprox.':a.remBRLaprox==null?'':a.remBRLaprox})));
     add('Rateios',Object.values(D.rat).map(r=>({'Fornecedor':r.forn,'Serviço':r.serv,'Vigência':r.vig,'% do cliente':r.pct,'Participantes':r.n})));
     add('Exames',D.exames.map(e=>({'Competência':e.comp,'Exames':e.qtde,'Acumulado':e.acum,'Franquia':e.franq,'% franquia':e.pct,'Saldo':e.saldo,'Status':e.status})));
-    add('Simulador',[{'Última parcela devida':S.saida,'Parcelas restantes':S.n,'Receita bruta perdida':S.rb,'Receita líquida perdida':S.rl,'Custo AGFA remanescente':S.agRem,'Custos compartilhados':S.comp,'Custos dedicados':S.ded,'Multa informada':S.multa,'Resultado projetado (contrato mantido)':S.res}]);
+    add('Simulador',[{'Última parcela devida':S.saida,'Parcelas restantes':S.n,'Receita bruta perdida':S.rb,'Receita líquida perdida':S.rl,'Custo AGFA remanescente':S.agRem,'Custos compartilhados':S.comp,'Custos dedicados':S.ded,'Multa contratual do cliente':S.multa,'Multas de fornecedores':cliMultasTotal(CLI_SEL),'Resultado projetado (contrato mantido)':S.res}]);
     XLSX.writeFile(wb,nomeBase+'.xlsx');
   }});
 }
