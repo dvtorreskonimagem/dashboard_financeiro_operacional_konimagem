@@ -7329,7 +7329,8 @@ function cliDados(nome){
   const forn=nomesSup.map(k=>{
     const tot=mensal.reduce((s,m)=>s+(m.sup[k]||0),0);
     const meses=mensal.filter(m=>(m.sup[k]||0)>0).length;
-    const med3=ult3.length?ult3.reduce((s,m)=>s+(m.sup[k]||0),0)/ult3.length:0;
+    // AGFA OPEX é parcela contratual (USD × PTAX): usa o último mês com custos, o mesmo valor da projeção; os demais usam a média de 3 meses
+    const med3=(k==='AGFA-OPEX'&&refC)?(refC.sup[k]||0):(ult3.length?ult3.reduce((s,m)=>s+(m.sup[k]||0),0)/ult3.length:0);
     const rr=rat[k]; const isAg=(k==='AGFA-OPEX'||k==='AGFA-CAPEX');
     const tipo=isAg?(k==='AGFA-CAPEX'?'AGFA — investimento (CAPEX)':'AGFA — contrato (OPEX)'):(rr?(rr.pct>=99.99?'Dedicado (100% do cliente)':'Compartilhado (rateio)'):'Direto ao cliente (sem rateio)');
     const com=mensal.filter(m=>(m.sup[k]||0)>0); const pri=com[0], ulc=com[com.length-1];
@@ -7446,8 +7447,8 @@ function renderCliente(){
       '<td style="white-space:normal;min-width:190px">'+(f.primParc==null?'—':('parcelas '+parc+'<br><span style="color:var(--ink3)">último: parcela '+(f.ultParc>0?f.ultParc:'impl.')+' · '+f.ultComp+' · '+R(f.ultValor)+'</span>'))+'</td><td style="text-align:right">'+mi+'</td></tr>';
   });
   const ativosCnt=fl.filter(f=>f.acao!=='SEM AÇÃO').length;
-  h+=sec('Fornecedores: o que fazer com cada um ('+ativosCnt+' com ação)','Ordenado por prioridade. "Custo até o fim" = custo mensal médio × parcelas restantes (AGFA: parcelas restantes do contrato AGFA). Multa: campo para você anotar o valor informado pelo fornecedor (fica salvo só neste navegador).')+
-    tbl(['Ação','Fornecedor','O que fazer','>Custo mensal (média 3 meses)','>% rateio','>Custo até o fim do contrato','Em que parcelas o custo apareceu','>Multa informada (R$)'],bf,
+  h+=sec('Fornecedores: o que fazer com cada um ('+ativosCnt+' com ação)','Ordenado por prioridade. Custo mensal = média dos últimos 3 meses com custos lançados (AGFA: valor do último mês, pois é parcela contratual). "Custo até o fim" = custo mensal × parcelas restantes (AGFA: parcelas restantes do contrato AGFA). Multa: campo para você anotar o valor informado pelo fornecedor (fica salvo só neste navegador).')+
+    tbl(['Ação','Fornecedor','O que fazer','>Custo mensal (média 3 meses; AGFA = último mês)','>% rateio','>Custo até o fim do contrato','Em que parcelas o custo apareceu','>Multa informada (R$)'],bf,
       '<tr style="font-weight:800"><td colspan="3">TOTAL (fornecedores com ação)</td>'+tdb(R(fl.filter(f=>f.acao!=='SEM AÇÃO').reduce((x,f)=>x+f.med3,0)))+'<td></td>'+tdb(R(fl.filter(f=>f.acao!=='SEM AÇÃO').reduce((x,f)=>x+(f.cat==='agfa'?S.agRem:f.med3*S.n),0)))+'<td></td>'+tdb(R(multaF))+'</tr>',620);
 
   /* texto pronto para a gerência */
