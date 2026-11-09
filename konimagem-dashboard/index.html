@@ -6101,16 +6101,29 @@ function franqGrafico(cliente){
     tb+=`<tr><td>${FQ_NM[a.mn-1]}</td><td class="mono">${fm(a.vol)} <span style="color:var(--ink3);font-size:10.5px">${a.label}</span></td><td class="mono">${fm(b.vol)} <span style="color:var(--ink3);font-size:10.5px">${b.label}</span></td><td class="mono" style="color:${d==null?'var(--ink3)':d<0?'var(--neg)':'var(--pos)'}">${d==null?'—':(d>=0?'+':'')+(d*100).toFixed(1).replace('.',',')+'%'}</td></tr>`; }
   tb+='</tbody></table></div>';
   openModal(`📊 Volumetria de exames — ${esc(cliente)}`,
-    cards+`<div id="franqModVol" style="height:300px"></div><div id="franqModAc" style="height:260px;margin-top:6px"></div><div style="margin-top:12px">${tb}</div>`);
+    cards+`<div id="franqModTl" style="height:300px"></div><div id="franqModVol" style="height:300px;margin-top:6px"></div><div id="franqModAc" style="height:260px;margin-top:6px"></div><div style="margin-top:12px">${tb}</div>`);
   try{ document.querySelector('#modalBg .modal').style.maxWidth='980px'; }catch(e){}
   setTimeout(()=>{
     try{
-      ['franqModVol','franqModAc'].forEach(id=>{ if(CH[id]){ try{CH[id].dispose();}catch(e){} delete CH[id]; } });
+      ['franqModTl','franqModVol','franqModAc'].forEach(id=>{ if(CH[id]){ try{CH[id].dispose();}catch(e){} delete CH[id]; } });
       const meses=A.meses.map(m=>FQ_NM[m.mn-1]);
       const cA='#d98a14', cB='#2a78d6';
+      const cT=chart('franqModTl'), todos0=A.meses.concat(B.meses); let ultI=-1; todos0.forEach((m,i)=>{ if(m.vol!=null) ultI=i; }); const nT=Math.min(24,Math.max(ultI+3,13)), todos=todos0.slice(0,nT);
+      const kfmt=x=>x==null?'':(x>=1000?(x/1000).toFixed(1).replace('.',',')+'k':String(x));
+      const mkS=(nome,cor,arr)=>({name:nome,type:'bar',stack:'tl',itemStyle:{color:cor},label:{show:true,position:'top',fontSize:9,formatter:p=>kfmt(p.value)},data:arr});
+      cT.setOption({
+        title:{text:'Volumetria mês a mês (linha do tempo)',textStyle:{fontSize:13},left:0},
+        tooltip:{trigger:'axis',axisPointer:{type:'shadow'},valueFormatter:x=>x==null?'—':fNum(x)},
+        legend:{data:['Vigência anterior ('+A.periodo+')','Vigência atual ('+B.periodo+')'],bottom:0,textStyle:{fontSize:11}},
+        grid:{left:56,right:14,top:36,bottom:78},
+        xAxis:{type:'category',data:todos.map(m=>m.label),axisLabel:{fontSize:10,interval:0,rotate:todos.length>14?45:0}},
+        yAxis:{type:'value',axisLabel:{formatter:x=>x>=1000?(x/1000).toLocaleString('pt-BR')+'k':x}},
+        series:[
+          Object.assign(mkS('Vigência anterior ('+A.periodo+')',cA,A.meses.map(m=>m.vol).concat(B.meses.map(()=>null)).slice(0,nT)),{markLine:A.franq?{silent:true,symbol:'none',lineStyle:{color:'#d93a3a',type:'dashed'},label:{formatter:'franquia ÷ 12 = '+fNum(Math.round(A.franq/12)),fontSize:10,position:'insideStartTop'},data:[{yAxis:A.franq/12}]}:undefined}),
+          mkS('Vigência atual ('+B.periodo+')',cB,A.meses.map(()=>null).concat(B.meses.map(m=>m.vol)).slice(0,nT))]});
       const c1=chart('franqModVol');
       c1.setOption({
-        title:{text:'Exames por mês — vigência anterior × atual',textStyle:{fontSize:13},left:0},
+        title:{text:'Comparativo: mesmo mês do ciclo, anterior × atual',textStyle:{fontSize:13},left:0},
         tooltip:{trigger:'axis',axisPointer:{type:'shadow'},valueFormatter:x=>x==null?'—':fNum(x)},
         legend:{data:['Anterior ('+A.periodo+')','Atual ('+B.periodo+')'],bottom:0,textStyle:{fontSize:11}},
         grid:{left:56,right:14,top:36,bottom:46},
@@ -6132,7 +6145,7 @@ function franqGrafico(cliente){
           {name:'Anterior',type:'line',connectNulls:false,itemStyle:{color:cA},lineStyle:{color:cA},data:A.meses.map(m=>m.acum),
             markLine:{silent:true,symbol:'none',lineStyle:{color:'#d93a3a',type:'dashed'},label:{formatter:'franquia '+fNum(A.franq),fontSize:10,position:'insideStartTop'},data:[{yAxis:A.franq}]}},
           {name:'Atual',type:'line',itemStyle:{color:cB},lineStyle:{color:cB},data:B.meses.map(m=>m.acum)}]});
-      c1.resize(); c2.resize();
+      cT.resize(); c1.resize(); c2.resize();
     }catch(e){ console.warn('franqGrafico',e); }
   },60);
 }
@@ -16038,17 +16051,17 @@ body.mob-on>*:not(#mobApp):not(#mobSheet):not(#mobCapa):not(.modal-bg):not(scrip
       return '<div class="mb-card" data-c="'+esc(x.f.cliente)+'" onclick="mobFranq(this.dataset.c)" style="cursor:pointer;'+(enc?'opacity:.65':'')+'"><div class="mb-row" style="margin-bottom:6px"><b>'+esc(x.f.cliente)+(enc?' <span class="mb-hint" style="display:inline">(encerrado)</span>':'')+'</b><span style="font-size:12px;color:var(--mb-acc)">📊 volumetria ›</span></div>'+b+'</div>'; }).join('');
   }
   function svgVol(v){
-    var A=v.anterior.meses, B=v.atual.meses, W=340,H=190,pl=36,pr=4,pt=10,pb=22, vals=[];
-    A.concat(B).forEach(function(m){ if(m.vol!=null) vals.push(m.vol); });
+    var T0=v.anterior.meses.concat(v.atual.meses), ui=-1; T0.forEach(function(m,i){ if(m.vol!=null) ui=i; }); var T=T0.slice(0,Math.min(24,Math.max(ui+3,13))), n=T.length, W=340,H=200,pl=36,pr=4,pt=10,pb=34, vals=[];
+    T.forEach(function(m){ if(m.vol!=null) vals.push(m.vol); });
     if(!vals.length) return '<div class="mb-hint">Sem volumetria lançada.</div>';
-    var mx=Math.max.apply(null,vals), gw=(W-pl-pr)/12, bw=Math.max(4,(gw-4)/2), Y=function(x){return pt+(1-x/mx)*(H-pt-pb);};
+    var mx=Math.max.apply(null,vals), gw=(W-pl-pr)/n, bw=Math.max(3,gw-2.5), Y=function(x){return pt+(1-x/mx)*(H-pt-pb);};
     var fm=function(x){return x>=1e6?(x/1e6).toFixed(1)+'M':x>=1e3?(x/1e3).toFixed(0)+'k':String(Math.round(x));}, g='';
     [mx,mx/2,0].forEach(function(x){ g+='<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+Y(x).toFixed(1)+'" y2="'+Y(x).toFixed(1)+'" stroke="currentColor" stroke-opacity=".15"/><text x="'+(pl-4)+'" y="'+(Y(x)+3).toFixed(1)+'" text-anchor="end" font-size="9" fill="currentColor" opacity=".65">'+fm(x)+'</text>'; });
-    for(var i=0;i<12;i++){ var x0=pl+i*gw+1;
-      if(A[i].vol!=null) g+='<rect x="'+x0.toFixed(1)+'" y="'+Y(A[i].vol).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(H-pb-Y(A[i].vol)).toFixed(1)+'" fill="#d98a14" rx="1.5"/>';
-      if(B[i].vol!=null) g+='<rect x="'+(x0+bw+1).toFixed(1)+'" y="'+Y(B[i].vol).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(H-pb-Y(B[i].vol)).toFixed(1)+'" fill="#2a78d6" rx="1.5"/>';
-      g+='<text x="'+(x0+bw).toFixed(1)+'" y="'+(H-7)+'" text-anchor="middle" font-size="8.5" fill="currentColor" opacity=".7">'+FQ_NM[A[i].mn-1].slice(0,3)+'</text>'; }
-    return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block">'+g+'</svg><div class="mb-hint" style="display:flex;gap:14px;margin-top:4px"><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#d98a14;margin-right:5px"></i>Anterior</span><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#2a78d6;margin-right:5px"></i>Atual</span></div>';
+    if(v.anterior.franq){ var yf=Y(Math.min(v.anterior.franq/12,mx)); g+='<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+yf.toFixed(1)+'" y2="'+yf.toFixed(1)+'" stroke="#d93a3a" stroke-dasharray="4 3" stroke-opacity=".8"/>'; }
+    for(var i=0;i<n;i++){ var x0=pl+i*gw+1, m=T[i], cor=i<12?'#d98a14':'#2a78d6';
+      if(m.vol!=null) g+='<rect x="'+x0.toFixed(1)+'" y="'+Y(m.vol).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(H-pb-Y(m.vol)).toFixed(1)+'" fill="'+cor+'" rx="1.5"/>';
+      if(i%2===0) g+='<text transform="translate('+(x0+bw/2+3).toFixed(1)+','+(H-pb+8)+') rotate(60)" font-size="8" fill="currentColor" opacity=".7">'+m.label+'</text>'; }
+    return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block">'+g+'</svg><div class="mb-hint" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:4px"><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#d98a14;margin-right:5px"></i>Vigência anterior</span><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#2a78d6;margin-right:5px"></i>Vigência atual</span><span style="color:#d93a3a">- - franquia ÷ 12</span></div>';
   }
   window.mobVig=function(k){ M.franqVig=k; draw(); };
   window.mobFranq=function(cli){ try{
@@ -16058,7 +16071,7 @@ body.mob-on>*:not(#mobApp):not(#mobSheet):not(#mobCapa):not(.modal-bg):not(scrip
     h+='<p style="margin:0 0 8px"><b>Último mês com dados:</b> '+(u?u.label+' · '+nf(u.vol)+' exames'+(d!=null?' ('+(d>=0?'+':'')+d.toFixed(1).replace('.',',')+'% vs '+p.label+')':''):'nenhum')+'</p>';
     h+='<p style="margin:0 0 8px;font-size:13px"><b>Anterior</b> '+A.periodo+': '+nf(A.total)+' de '+nf(A.franq)+(A.vazio?' · sem lançamentos':A.exced>0?' · <b style="color:#d93a3a">excedente +'+nf(A.exced)+'</b>':' · dentro da franquia')+'<br><b>Atual</b> '+B.periodo+': '+(B.vazio?'sem lançamentos ainda':nf(B.total)+' de '+nf(B.franq)+' ('+Math.round(B.pct*100)+'%)')+'</p>';
     h+=svgVol(v)+'<table style="margin-top:10px"><thead><tr><th style="text-align:left">Mês</th><th style="text-align:right">Anterior</th><th style="text-align:right">Atual</th></tr></thead><tbody>';
-    for(var i=0;i<12;i++) h+='<tr><td>'+FQ_NM[A.meses[i].mn-1]+'</td><td style="text-align:right">'+nf(A.meses[i].vol)+'</td><td style="text-align:right">'+nf(B.meses[i].vol)+'</td></tr>';
+    for(var i=0;i<12;i++) h+='<tr><td>'+FQ_NM[A.meses[i].mn-1]+'</td><td style="text-align:right">'+nf(A.meses[i].vol)+' <span style="opacity:.55;font-size:11px">'+A.meses[i].label+'</span></td><td style="text-align:right">'+nf(B.meses[i].vol)+' <span style="opacity:.55;font-size:11px">'+B.meses[i].label+'</span></td></tr>';
     h+='</tbody></table>';
     document.getElementById('mobSheetBody').innerHTML=h; mobSheet(true); }catch(e){ console.warn('mobFranq',e); } };
   function alertas(){
