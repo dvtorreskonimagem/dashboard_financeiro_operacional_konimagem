@@ -2936,6 +2936,42 @@ html.ui2 #capaHero{margin-top:4px}
     <div id="resumoRatBox"></div>
   </div>
 
+  <!-- DADOS POR CLIENTE -->
+  <div class="page" id="pg-cliente">
+    <style>
+      .cli-chips{display:flex;flex-wrap:wrap;gap:8px}
+      .cli-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:6px 13px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit}
+      .cli-chip i{width:8px;height:8px;border-radius:50%;display:inline-block}
+      .cli-chip:hover{border-color:var(--navy)}
+      .cli-chip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+      #pg-cliente .fc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+      #pg-cliente .tbl-wrap{border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+      #pg-cliente td,#pg-cliente th{text-align:left}
+      #pg-cliente thead th{position:sticky;top:0;z-index:1}
+      #pg-cliente tfoot td{background:var(--line2)}
+      #pg-cliente details.cli-det{border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:10px}
+      #pg-cliente details.cli-det>summary{cursor:pointer;padding:13px 16px;font-weight:700;color:var(--navy);font-size:14px;list-style:none}
+      #pg-cliente details.cli-det>summary::before{content:'▸';display:inline-block;margin-right:9px;transition:transform .15s}
+      #pg-cliente details.cli-det[open]>summary::before{transform:rotate(90deg)}
+      .cli-det-b{padding:0 16px 16px}
+      #pg-cliente .kpi .sub{font-size:11.5px;color:var(--ink3);margin-top:4px}
+    </style>
+    <div class="op-hero ex-hero">
+      <div class="op-hero-txt">
+        <div class="op-eyebrow">KONIMAGEM · DASHBOARD TI</div>
+        <h2>Dados por cliente</h2>
+        <p id="cliHint">Escolha um cliente no filtro abaixo para ver tudo sobre ele.</p>
+      </div>
+      <div class="op-badges"><button class="mini-btn" onclick="cliExportar()" data-html2canvas-ignore="true">⬇ Exportar Excel</button>
+        <button class="mini-btn" onclick="window.print()" data-html2canvas-ignore="true">🖨 Imprimir</button></div>
+    </div>
+    <div class="panel" style="margin-bottom:6px;display:flex;gap:18px;align-items:end;flex-wrap:wrap" data-html2canvas-ignore="true">
+      <div class="fgroup"><label>Cliente</label><select id="cliSelect" onchange="cliSel(this.value)" style="min-width:320px"></select></div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2);padding-bottom:8px"><input type="checkbox" id="cliEnc" onchange="cliToggleEnc(this.checked)"> Incluir contratos encerrados</label>
+    </div>
+    <div id="cliCorpo"></div>
+  </div>
+
   <!-- CONTRATOS -->
   <div class="page" id="pg-contratos">
     <div class="op-hero ex-hero">
@@ -4355,7 +4391,7 @@ const MESES=['01 - JAN','02 - FEV','03 - MAR','04 - ABR','05 - MAI','06 - JUN','
    Para trocar as senhas ou os perfis, edite o objeto ROLES abaixo. */
 const ROLES={
   admin:     { label:'Administrador', senha:'koni2026admin',     pages:null, canEdit:true },
-  gerencia:  { label:'Gerência',      senha:'koni2026gerencia',  pages:['capa','exec','rent','dre','matriz','forn','franq','agfa','equinix','contratos','vidacontrato','comp','insights','dados'], canEdit:false },
+  gerencia:  { label:'Gerência',      senha:'koni2026gerencia',  pages:['capa','exec','rent','dre','matriz','forn','franq','agfa','equinix','contratos','vidacontrato','comp','insights','dados','cliente'], canEdit:false },
   comercial: { label:'Comercial',     senha:'koni2026comercial', pages:['capa','exec','franq','contratos','vidacontrato','alerta','comp','insights'], canEdit:false },
 };
 const SESSION_KEY='koni_dashboard_session';
@@ -4602,7 +4638,7 @@ function buildClienteOptions(sel=''){
 // despMes), Rateios (ratLancAno/ratLancMes na aba Lançar, histórico completo na Consolidado) e
 // Comparação (compAnoA/compAnoB/compTipo). Nas outras 12 páginas o filtro do topo continua
 // funcionando normalmente (todas usam filtered()/FILT de verdade).
-const PAGINAS_SEM_FILTRO_TOPO=['checklist','despesas','rateios','comp','resumorat','alerta','capa','vidacontrato'];
+const PAGINAS_SEM_FILTRO_TOPO=['cliente','checklist','despesas','rateios','comp','resumorat','alerta','capa','vidacontrato'];
 // Páginas onde só uma parte do filtro do topo se aplica de verdade — ex: AGFA usa Ano (pra
 // escolher o ano do dashboard/gráfico), mas Mês/Cliente/Tipo/Cidade-UF/Resp.Comercial não têm
 // efeito nenhum ali (os lançamentos de AGFA não têm esses campos — mostra o ano inteiro, todos os
@@ -4693,8 +4729,8 @@ function clearFilters(){ FILT={ano:anosDisponiveis()[0]||FILT.ano,mes:'',cliente
 /* ============================================================
    NAV
    ============================================================ */
-const PAGES=[['capa','Visão Operacional'],['exec','Visão Executiva'],['rent','Rentabilidade'],['dre','DRE Gerencial'],['comp','Comparação'],['insights','Insights'],['alerta','Alertas'],['matriz','Matriz Cli×Forn'],['contratos','Contratos'],['vidacontrato','Vida do Contrato'],['franq','Franquia de Exames'],['lanc','Faturamento'],['rateios','Rateios'],['resumorat','Resumo Rateio'],['despesas','Despesas'],['agfa','AGFA'],['equinix','Equinix'],['forn','Visão Fornecedores'],['checklist','Checklist Mensal'],['dados','Dados']];
-const NAV_GROUPS=[['ACOMPANHAR',['capa','exec','alerta']],['LANÇAR',['lanc','rateios','despesas','agfa','equinix','forn']],['CONFERIR',['checklist','dados']],['ANALISAR',['rent','dre','comp','matriz','insights']],['CONTRATOS & FRANQUIA',['contratos','vidacontrato','franq']]];
+const PAGES=[['capa','Visão Operacional'],['exec','Visão Executiva'],['rent','Rentabilidade'],['dre','DRE Gerencial'],['comp','Comparação'],['insights','Insights'],['alerta','Alertas'],['matriz','Matriz Cli×Forn'],['contratos','Contratos'],['vidacontrato','Vida do Contrato'],['franq','Franquia de Exames'],['lanc','Faturamento'],['rateios','Rateios'],['resumorat','Resumo Rateio'],['despesas','Despesas'],['agfa','AGFA'],['equinix','Equinix'],['forn','Visão Fornecedores'],['checklist','Checklist Mensal'],['dados','Dados'],['cliente','Dados por cliente']];
+const NAV_GROUPS=[['ACOMPANHAR',['capa','exec','alerta']],['LANÇAR',['lanc','rateios','despesas','agfa','equinix','forn']],['CONFERIR',['checklist','dados']],['ANALISAR',['cliente','rent','dre','comp','matriz','insights']],['CONTRATOS & FRANQUIA',['contratos','vidacontrato','franq']]];
 const NAV_FECHADOS_PADRAO=['ANALISAR','CONTRATOS & FRANQUIA'];
 function navFechadosLer(){ try{ const j=localStorage.getItem('koni_nav_fechados'); if(j) return JSON.parse(j); }catch(e){} return NAV_FECHADOS_PADRAO.slice(); }
 function navToggle(label){ const f=navFechadosLer(); const i=f.indexOf(label); if(i>=0) f.splice(i,1); else f.push(label); try{ localStorage.setItem('koni_nav_fechados',JSON.stringify(f)); }catch(e){} buildNav(); }
@@ -4719,6 +4755,7 @@ const NAV_ICONS={
   equinix:'<rect x="4" y="3" width="16" height="6" rx="1"/><rect x="4" y="11" width="16" height="6" rx="1"/><line x1="7" y1="6" x2="7.01" y2="6"/><line x1="7" y1="14" x2="7.01" y2="14"/><path d="M12 17v4"/><path d="M8 21h8"/>',
   resumorat:'<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="12" y2="15"/>',
   vidacontrato:'<path d="M3 12h4l3 8 4-16 3 8h4"/>',
+  cliente:'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/>',
   capa:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M15 8h3"/><path d="M15 12h3"/><path d="M6 16h12"/>'
 };
 let curPage='capa';
@@ -5031,6 +5068,7 @@ function render(){
     if(curPage==='dados'){ renderDados(); renderRelConferencia(); }
     if(curPage==='despesas') renderDespesas();
     if(curPage==='checklist') renderChecklistAtivo();
+    if(curPage==='cliente') renderCliente();
   } catch(e) {
     console.error('[render() erro em '+curPage+']', e);
     const pg = document.getElementById('pg-'+curPage);
@@ -5957,6 +5995,146 @@ function franqAgg(rows){
     f.status=f.pct>1?'Excedida':(f.pct>=0.8?'Atenção':'Ok');return f;}).sort((a,b)=>a.cliente.localeCompare(b.cliente));
   res.mesVigLabel=mesVigLabel;
   return res;
+}
+
+/* ===== Franquia: vigência atual + anterior, com gráfico de volumetria (desktop e celular) ===== */
+let FRANQ_VIG='ambas'; // 'ambas' | 'atual' | 'anterior'
+const FQ_NM=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+// Ciclos (vigências) de um cliente, calculados pelo calendário e pelo FRANQUIA_CICLO — independente dos filtros do topo.
+// atual = ciclo que contém o mês de hoje (pode estar sem lançamento ainda); anterior = ciclo imediatamente antes.
+function franqCiclosCli(cliente){
+  const rs=ROWS.filter(r=>isRecCli(r)&&r.cliente===cliente&&r.franquiaAnual>0).sort(sortCrono);
+  if(!rs.length) return null;
+  const mi=FRANQUIA_CICLO[cliente]||1;
+  const hoje=new Date(), aH=hoje.getFullYear(), mH=hoje.getMonth()+1, idxHoje=aH*12+mH;
+  const kAtual=mH>=mi?aH:aH-1;
+  const franqUlt=rs[rs.length-1].franquiaAnual||0;
+  const mk=(k)=>{
+    const rc=rs.filter(r=>(r.mesNum>=mi?r.ano:r.ano-1)===k);
+    const meses=[]; let acRun=0, total=0, lanc=0, ultIdx=-1;
+    for(let i=0;i<12;i++){
+      const mn=((mi-1+i)%12)+1, an=k+((mi-1+i)>=12?1:0);
+      const rm=rc.filter(r=>r.ano===an&&r.mesNum===mn);
+      const ce=rm.filter(r=>r.qtdeExames>0);
+      const vol=ce.length?rm.reduce((t,r)=>t+(r.qtdeExames||0),0):null;
+      if(vol!=null){ acRun+=vol; }
+      const ac=ce.length?((ce[ce.length-1].examesAcum>0)?ce[ce.length-1].examesAcum:acRun):null;
+      if(ac!=null){ total=ac; lanc++; ultIdx=i; }
+      meses.push({mn,an,label:FQ_NM[mn-1]+'/'+String(an).slice(2),vol,acum:ac});
+    }
+    const mf=mi===1?12:mi-1, anoFim=mi===1?k:k+1, idxFim=anoFim*12+mf;
+    const franq=rc.length?(rc[rc.length-1].franquiaAnual||franqUlt):franqUlt;
+    const fechado=idxFim<idxHoje, pct=franq?total/franq:0, exced=total-franq;
+    let status; if(fechado) status=exced>0?'Cobrar':'Fechada'; else status=pct>1?'Excedida':(pct>=0.8?'Atenção':'Ok');
+    return {k,meses,total,lanc,ultIdx,franq,pct,exced,fechado,status,vazio:lanc===0,
+      periodo:FQ_NM[mi-1]+'/'+k+' → '+FQ_NM[mf-1]+'/'+anoFim};
+  };
+  const atual=mk(kAtual), anterior=mk(kAtual-1);
+  // último mês (em qualquer dos dois ciclos) que já tem volumetria
+  let ult=null, pen=null;
+  [anterior,atual].forEach(c=>c.meses.forEach(m=>{ if(m.vol!=null){ pen=ult; ult=m; } }));
+  return {cliente,mi,franq:atual.franq,atual,anterior,ultMes:ult,penMes:pen};
+}
+function franqVigencias(fr){ const o={}; fr.forEach(f=>{ o[f.cliente]=franqCiclosCli(f.cliente); }); return o; }
+function franqSetVig(v){ FRANQ_VIG=v; renderFranq(); }
+function franqCorSt(st){ return (st==='Excedida'||st==='Cobrar')?'var(--neg)':st==='Atenção'?'var(--warn)':st==='Fechada'?'var(--ink3)':'var(--pos)'; }
+function franqChipSt(st){
+  const t={Excedida:'⚠ Excedida','Atenção':'⚠ Atenção',Ok:'✓ Ok',Cobrar:'💰 Cobrar excedente',Fechada:'✓ Fechada'}[st]||st, c=franqCorSt(st);
+  return `<span style="font-size:11px;font-weight:600;color:${c};background:color-mix(in srgb,${c} 12%,transparent);padding:1px 7px;border-radius:4px;white-space:nowrap">${t}</span>`;
+}
+function franqBloco(c,rotulo,compacto){
+  const cor=franqCorSt(c.status), pct=Math.round(c.pct*100), bar=Math.min(pct,100);
+  let txt;
+  if(c.vazio) txt=c.fechado?'sem lançamentos neste período':'sem lançamentos ainda — ciclo começou em '+c.periodo.split(' → ')[0];
+  else if(c.fechado) txt=`total ${fNum(c.total)} / ${fNum(c.franq)} · `+(c.exced>0?`<span style="color:var(--neg);font-weight:700">excedente +${fNum(c.exced)} exames</span>`:`dentro da franquia (saldo ${fNum(-c.exced)})`);
+  else txt=`acum ${fNum(c.total)} / ${fNum(c.franq)} · saldo <span style="color:${c.exced>0?'var(--neg)':'var(--ink3)'};font-weight:600">${fNum(-c.exced)}</span>`;
+  return `<div style="${compacto?'margin-top:7px;padding-top:6px;border-top:1px dashed var(--line2)':''}">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap">
+      ${franqChipSt(c.status)}
+      <span style="font-size:11px;font-weight:600;color:var(--ink2)">${rotulo}</span>
+      <span class="mono" style="font-size:11px;color:var(--ink3)">${c.periodo}</span>
+      <span style="font-size:10.5px;color:var(--ink3);margin-left:auto">${txt}</span>
+      <span style="font-size:${compacto?'13':'15'}px;font-weight:700;color:${cor};min-width:44px;text-align:right">${c.vazio?'—':pct+'%'}</span>
+    </div>
+    <div style="height:${compacto?5:7}px;background:var(--line2);border-radius:4px;overflow:hidden"><div style="height:100%;width:${bar}%;background:${cor};border-radius:4px"></div></div>
+  </div>`;
+}
+function franqListaHtml(fr,VIG){
+  const modo=FRANQ_VIG;
+  const ord={Cobrar:0,Excedida:1,'Atenção':2,Ok:3,Fechada:4};
+  const L=fr.map(f=>({f,v:VIG[f.cliente]})).filter(x=>x.v);
+  const chave=x=>{ const a=x.v.atual, p=x.v.anterior;
+    if(modo==='anterior') return [ord[p.vazio?'Fechada':p.status],-p.pct];
+    const s=Math.min(ord[a.status], (modo==='ambas'&&!p.vazio)?ord[p.status]:9);
+    return [s,-a.pct]; };
+  L.sort((x,y)=>{ const a=chave(x), b=chave(y); return (a[0]-b[0])||(a[1]-b[1])||x.f.cliente.localeCompare(y.f.cliente); });
+  const btn=(k,t)=>`<button class="mini-btn" onclick="franqSetVig('${k}')" style="padding:4px 12px;font-size:12px;${modo===k?'background:var(--navy,#16324d);color:#fff;border-color:transparent':''}">${t}</button>`;
+  const bar=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+    <span style="font-size:12px;color:var(--ink3);font-weight:600">Vigência:</span>${btn('ambas','Atual + anterior')}${btn('atual','Só atual')}${btn('anterior','Só anterior')}
+    <span class="hint" style="margin-left:auto">Clique em um cliente para ver o gráfico de volumetria mês a mês</span></div>`;
+  const rows=L.map(({f,v})=>{
+    const enc=CONTRATOS_ENCERRADOS[f.cliente];
+    const encBadge=enc?` <span style="font-size:10.5px;color:var(--ink3);opacity:.7">(encerrado)</span>`:'';
+    let corpo;
+    if(modo==='atual') corpo=franqBloco(v.atual,'Vigência atual');
+    else if(modo==='anterior') corpo=franqBloco(v.anterior,'Vigência anterior');
+    else corpo=franqBloco(v.atual,'Vigência atual')+(v.anterior.vazio&&enc?'':franqBloco(v.anterior,'Vigência anterior',true));
+    return `<div class="fq-cli" data-cli="${esc(f.cliente)}" onclick="franqGrafico(this.dataset.cli)" title="Clique para ver o gráfico de volumetria" style="cursor:pointer;padding:9px 6px;border-bottom:1px solid var(--line2)${enc?';opacity:.62':''}">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><span style="font-size:13px;font-weight:700;color:var(--ink1)">${esc(f.cliente)}${encBadge}</span><span style="font-size:11px;color:var(--acc,#2a78d6);margin-left:auto">📊 ver volumetria</span></div>${corpo}</div>`;
+  }).join('');
+  return bar+(rows||'<span style="color:var(--ink3);font-size:13px">Nenhum dado de franquia disponível.</span>');
+}
+function franqGrafico(cliente){
+  const v=franqCiclosCli(cliente); if(!v){ return; }
+  const A=v.anterior, B=v.atual, fm=n=>n==null?'—':fNum(n);
+  const u=v.ultMes, p=v.penMes;
+  const card=(t,val,sub)=>`<div style="flex:1;min-width:150px;border:1px solid var(--line2);border-radius:10px;padding:9px 12px"><div style="font-size:10.5px;color:var(--ink3);font-weight:700;letter-spacing:.03em">${t}</div><div style="font-size:19px;font-weight:700;font-family:var(--font-mono)">${val}</div><div style="font-size:11px;color:var(--ink3)">${sub||''}</div></div>`;
+  const dUlt=(u&&p&&p.vol)?((u.vol-p.vol)/p.vol):null;
+  const mediaA=A.lanc?A.total/A.lanc:null;
+  const cards=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+    ${card('ÚLTIMO MÊS COM DADOS',u?fm(u.vol):'—',u?u.label+(dUlt!=null?` · ${dUlt>=0?'+':''}${(dUlt*100).toFixed(1).replace('.',',')}% vs ${p.label}`:''):'sem lançamentos')}
+    ${card('VIGÊNCIA ANTERIOR',fm(A.total),`${A.periodo} · franquia ${fm(A.franq)}<br>`+(A.vazio?'sem lançamentos':A.exced>0?`<b style="color:var(--neg)">excedente +${fm(A.exced)}</b>`:`dentro da franquia (saldo ${fm(-A.exced)})`))}
+    ${card('VIGÊNCIA ATUAL',B.vazio?'—':fm(B.total),`${B.periodo}<br>`+(B.vazio?'sem lançamentos ainda':`${fPct(B.pct)} da franquia de ${fm(B.franq)}`))}
+    ${card('MÉDIA MENSAL (ANTERIOR)',mediaA!=null?fm(Math.round(mediaA)):'—',A.lanc?A.lanc+' meses lançados':'')}</div>`;
+  let tb='<div class="tbl-wrap"><table><thead><tr><th>Mês do ciclo</th><th>Anterior</th><th>Atual</th><th>Variação</th></tr></thead><tbody>';
+  for(let i=0;i<12;i++){ const a=A.meses[i], b=B.meses[i], d=(a.vol&&b.vol!=null)?(b.vol-a.vol)/a.vol:null;
+    tb+=`<tr><td>${FQ_NM[a.mn-1]}</td><td class="mono">${fm(a.vol)} <span style="color:var(--ink3);font-size:10.5px">${a.label}</span></td><td class="mono">${fm(b.vol)} <span style="color:var(--ink3);font-size:10.5px">${b.label}</span></td><td class="mono" style="color:${d==null?'var(--ink3)':d<0?'var(--neg)':'var(--pos)'}">${d==null?'—':(d>=0?'+':'')+(d*100).toFixed(1).replace('.',',')+'%'}</td></tr>`; }
+  tb+='</tbody></table></div>';
+  openModal(`📊 Volumetria de exames — ${esc(cliente)}`,
+    cards+`<div id="franqModVol" style="height:300px"></div><div id="franqModAc" style="height:260px;margin-top:6px"></div><div style="margin-top:12px">${tb}</div>`);
+  try{ document.querySelector('#modalBg .modal').style.maxWidth='980px'; }catch(e){}
+  setTimeout(()=>{
+    try{
+      ['franqModVol','franqModAc'].forEach(id=>{ if(CH[id]){ try{CH[id].dispose();}catch(e){} delete CH[id]; } });
+      const meses=A.meses.map(m=>FQ_NM[m.mn-1]);
+      const cA='#d98a14', cB='#2a78d6';
+      const c1=chart('franqModVol');
+      c1.setOption({
+        title:{text:'Exames por mês — vigência anterior × atual',textStyle:{fontSize:13},left:0},
+        tooltip:{trigger:'axis',axisPointer:{type:'shadow'},valueFormatter:x=>x==null?'—':fNum(x)},
+        legend:{data:['Anterior ('+A.periodo+')','Atual ('+B.periodo+')'],bottom:0,textStyle:{fontSize:11}},
+        grid:{left:56,right:14,top:36,bottom:46},
+        xAxis:{type:'category',data:meses},
+        yAxis:{type:'value',axisLabel:{formatter:x=>x>=1000?(x/1000).toLocaleString('pt-BR')+'k':x}},
+        series:[
+          {name:'Anterior ('+A.periodo+')',type:'bar',itemStyle:{color:cA},data:A.meses.map(m=>m.vol),
+            markLine:mediaA?{silent:true,symbol:'none',lineStyle:{color:cA,type:'dashed'},label:{formatter:'média anterior '+fNum(Math.round(mediaA)),fontSize:10,position:'insideEndTop'},data:[{yAxis:mediaA}]}:undefined},
+          {name:'Atual ('+B.periodo+')',type:'bar',itemStyle:{color:cB},data:B.meses.map(m=>m.vol)}]});
+      const c2=chart('franqModAc');
+      c2.setOption({
+        title:{text:'Acumulado no ciclo × franquia',textStyle:{fontSize:13},left:0},
+        tooltip:{trigger:'axis',valueFormatter:x=>x==null?'—':fNum(x)},
+        legend:{data:['Anterior','Atual'],bottom:0,textStyle:{fontSize:11}},
+        grid:{left:56,right:14,top:36,bottom:46},
+        xAxis:{type:'category',data:meses},
+        yAxis:{type:'value',axisLabel:{formatter:x=>x>=1000?(x/1000).toLocaleString('pt-BR')+'k':x}},
+        series:[
+          {name:'Anterior',type:'line',connectNulls:false,itemStyle:{color:cA},lineStyle:{color:cA},data:A.meses.map(m=>m.acum),
+            markLine:{silent:true,symbol:'none',lineStyle:{color:'#d93a3a',type:'dashed'},label:{formatter:'franquia '+fNum(A.franq),fontSize:10,position:'insideStartTop'},data:[{yAxis:A.franq}]}},
+          {name:'Atual',type:'line',itemStyle:{color:cB},lineStyle:{color:cB},data:B.meses.map(m=>m.acum)}]});
+      c1.resize(); c2.resize();
+    }catch(e){ console.warn('franqGrafico',e); }
+  },60);
 }
 
 /* ---------- MATRIZ CLIENTE x FORNECEDOR ---------- */
@@ -7222,9 +7400,312 @@ function fichaCliente(nome){
     }
     const ult=fat.slice(-3).reverse();
     if(ult.length) h+='<div class="fc-sec">Últimas faturas</div><div class="tbl-wrap"><table><thead><tr><th>Mês</th><th>Pedido</th><th>NF</th>'+(verFin?'<th>Valor bruto</th>':'')+'</tr></thead><tbody>'+ult.map(r=>(()=>{ const ph=v=>!v||/^0+$/.test(String(v).trim()); const mn=MANUAL.filter(m=>m.cliente===nome&&m.ano===r.ano&&m.mesNum===r.mesNum&&m.natureza==='RECEITA'&&(!ph(m.nf)||!ph(m.pedido))).slice(-1)[0]||{}; const ped=!ph(mn.pedido)?mn.pedido:r.pedido, nf=!ph(mn.nf)?mn.nf:r.nf; return '<tr><td>'+mmAA(r)+'</td><td>'+(!ph(ped)?esc(ped):'—')+'</td><td>'+(!ph(nf)?esc(nf):'<span style="color:#B45309">pendente</span>')+'</td>'+(verFin?'<td class="mono">'+fBRL(r.rb)+'</td>':'')+'</tr>'; })()).join('')+'</tbody></table></div>';
-    if(verFin) h+='<div style="margin-top:14px"><button class="mini-btn" onclick="closeModal();clienteModal(this.dataset.c)" data-c="'+esc(nome)+'">Ver análise financeira completa</button></div>';
+    if(verFin) h+='<div style="margin-top:14px"><button class="mini-btn" onclick="closeModal();clienteModal(this.dataset.c)" data-c="'+esc(nome)+'">Ver análise financeira completa</button>'+(paginaPermitida('cliente')?' <button class="mini-btn" onclick="closeModal();abrirDadosCliente(this.dataset.c)" data-c="'+esc(nome)+'">Abrir em Dados por cliente</button>':'')+'</div>';
     openModal('Ficha do cliente',h);
   }catch(e){ console.warn('fichaCliente',e); }
+}
+/* ===== DADOS POR CLIENTE (aba) — só leitura: junta, por cliente, tudo o que o dashboard já sabe ===== */
+let CLI_SEL=''; let CLI_BUSCA=''; let CLI_SIM={saida:null,rej:0,multa:0};
+try{ CLI_SEL=sessionStorage.getItem('koni_cli_sel')||''; }catch(e){}
+let CLI_MULTAS={}; try{ CLI_MULTAS=JSON.parse(localStorage.getItem('koni_cli_multas')||'{}')||{}; }catch(e){ CLI_MULTAS={}; }
+function cliMultaSet(el){ const c=CLI_SEL, f=el.dataset.f; const v=parseFloat(String(el.value).replace(',','.')); CLI_MULTAS[c]=CLI_MULTAS[c]||{}; if(Number.isFinite(v)&&v>0) CLI_MULTAS[c][f]=v; else delete CLI_MULTAS[c][f]; try{ localStorage.setItem('koni_cli_multas',JSON.stringify(CLI_MULTAS)); }catch(e){} renderCliente(); }
+function cliMultasTotal(nome){ return Object.values(CLI_MULTAS[nome]||{}).reduce((s,v)=>s+(+v||0),0); }
+function cliCopiar(id){ const el=document.getElementById(id); if(!el) return; const t=el.innerText; try{ navigator.clipboard.writeText(t).then(()=>{ const b=document.getElementById(id+'Btn'); if(b){ b.textContent='✓ Copiado'; setTimeout(()=>b.textContent='Copiar texto',1800); } }); }catch(e){ const r=document.createRange(); r.selectNodeContents(el); const sl=window.getSelection(); sl.removeAllRanges(); sl.addRange(r); } }
+function cliChartResize(){ try{ if(CH.cliChart) CH.cliChart.resize(); }catch(e){} }
+const CLI_ACAO={'CANCELAR':{cor:'#DC2626',ord:0},'CONFIRMAR E CANCELAR':{cor:'#D97706',ord:1},'NEGOCIAR AGFA':{cor:'#7C3AED',ord:2},'REDISTRIBUIR':{cor:'#2F5D87',ord:3},'SEM AÇÃO':{cor:'#94A3B8',ord:4}};
+function cliTexto(f,D){
+  const pct=f.pct!=null?f.pct.toLocaleString('pt-BR',{maximumFractionDigits:2})+'%':'';
+  if(f.acao==='CANCELAR') return 'Contratado só para este cliente (100% do rateio). Encerrar junto com o contrato; confirmar multa, fidelidade e aviso prévio.';
+  if(f.acao==='CONFIRMAR E CANCELAR') return 'Custo direto sem rateio cadastrado. Confirmar se é exclusivo deste cliente e, se for, cancelar; verificar multa e aviso prévio.';
+  if(f.acao==='NEGOCIAR AGFA'){ const a=D.ag.find(x=>x.tipo==='OPEX'); return 'Contrato AGFA'+(a?' '+a.servico+': parcela '+a.atual+' de '+a.total+', restam '+a.restantes+' até '+a.fim+' (USD '+a.remUSD.toLocaleString('pt-BR',{minimumFractionDigits:2})+')':'')+'. Tende a continuar após a saída: negociar rescisão, cessão a outro cliente ou redução.'; }
+  if(f.acao==='REDISTRIBUIR') return 'Serviço compartilhado: o custo não some, a parcela do cliente ('+pct+') passa aos demais. Pedir ao fornecedor redução de capacidade/preço; sem isso não há economia.';
+  if(f.cat==='sunk') return 'Investimento (CAPEX) já realizado; não há o que cancelar.';
+  return 'Sem custo lançado nos últimos 3 meses. Nenhuma ação necessária.';
+}
+
+const _cliChave=r=>r.ano*12+r.mesNum-1;
+const _cliMM=r=>String(r.mesNum).padStart(2,'0')+'/'+r.ano;
+const _cliKMM=k=>String((k%12)+1).padStart(2,'0')+'/'+Math.floor(k/12);
+function cliListaClientes(){ const m={}; ROWS.forEach(r=>{ if(r.natureza==='RECEITA'&&r.segmento==='CLIENTE'&&r.cliente) m[r.cliente]=1; }); return Object.keys(m).sort((a,b)=>a.localeCompare(b,'pt-BR')); }
+function abrirDadosCliente(nome){ CLI_SEL=nome; CLI_SIM={saida:null,rej:0,multa:0}; try{ sessionStorage.setItem('koni_cli_sel',nome); }catch(e){} goPage('cliente'); }
+function cliSel(nome){ CLI_SEL=nome||''; CLI_SIM={saida:null,rej:0,multa:0}; try{ sessionStorage.setItem('koni_cli_sel',nome); }catch(e){} renderCliente(); }
+let CLI_ENC=false; function cliToggleEnc(v){ CLI_ENC=!!v; cliDesenharLista(); }
+function cliSimSet(){
+  const g=id=>{ const el=document.getElementById(id); return el?parseFloat(String(el.value).replace(',','.')):NaN; };
+  const s=g('cliSimSaida'), j=g('cliSimRej'), m=g('cliSimMulta');
+  CLI_SIM.saida=Number.isFinite(s)?Math.round(s):null; CLI_SIM.rej=Number.isFinite(j)?j/100:0; CLI_SIM.multa=Number.isFinite(m)?m:0;
+  renderCliente();
+}
+function cliDesenharLista(){
+  const sel=document.getElementById('cliSelect'); if(!sel) return;
+  const st={}; contractAggCached().forEach(c=>st[c.cliente]=c.status);
+  const chk=document.getElementById('cliEnc'); if(chk) chk.checked=CLI_ENC;
+  // só clientes ativos (contrato não encerrado); o cliente já escolhido continua na lista mesmo que seja encerrado
+  const lista=cliListaClientes().filter(n=>CLI_ENC||st[n]!=='Encerrado'||n===CLI_SEL);
+  sel.innerHTML='<option value="">Selecione um cliente…</option>'+lista.map(n=>'<option value="'+esc(n)+'"'+(n===CLI_SEL?' selected':'')+'>'+esc(n)+(st[n]?' — '+esc(st[n]):'')+'</option>').join('');
+  sel.value=lista.includes(CLI_SEL)?CLI_SEL:'';
+}
+/* Reúne TODOS os números de um cliente (usado pela tela e pela exportação — a mesma fonte para os dois) */
+function cliDados(nome){
+  const rows=ROWS.filter(r=>r.cliente===nome&&r.natureza==='RECEITA').slice().sort(sortCrono);
+  const fat=rows.filter(r=>r.rb>0);
+  const ult=fat.length?fat[fat.length-1]:null;
+  const c=contractAggCached().find(x=>x.cliente===nome)||null;
+  const t=totals(rows);
+  const mensalRaw=rows.filter(r=>r.rb>0||r.custoTotal>0).map(r=>({
+    ano:r.ano,mesNum:r.mesNum,comp:_cliMM(r),parcela:r.parcela||0,nf:(r.parcela>0&&r.nf&&!/^0+$/.test(String(r.nf)))?String(r.nf):'',pedido:(r.parcela>0&&r.pedido&&!/^0+$/.test(String(r.pedido)))?String(r.pedido):'',
+    rb:r.rb||0,rl:r.rl||0,imp:(r.rb||0)-(r.rl||0),custo:r.custoTotal||0,lucro:(r.rl||0)-(r.custoTotal||0),exames:r.qtdeExames||0,sup:Object.assign({},r.sup||{}),ref:r}));
+  // linha só de custo (ex.: rateio lançado na linha da base) + linha de faturamento do mesmo mês/parcela viram uma só
+  const mensal=[]; mensalRaw.forEach(m=>{ if(m.rb===0&&m.custo>0){ const t=mensalRaw.find(x=>x!==m&&x.ano===m.ano&&x.mesNum===m.mesNum&&x.parcela===m.parcela&&x.rb>0); if(t){ t.custo+=m.custo; t.lucro=t.rl-t.custo; Object.keys(m.sup).forEach(k=>{ t.sup[k]=(t.sup[k]||0)+m.sup[k]; }); t.exames+=m.exames; return; } } mensal.push(m); });
+  // fornecedores
+  const rat={}; RATEIOS.filter(x=>x.status==='ativo').forEach(rt=>{ const it=(rt.itens||[]).find(i=>i.cliente===nome); if(it) rat[rt.key]={pct:it.pct,vig:rt.vigIni,n:(rt.itens||[]).length,forn:rt.forn,serv:rt.serv}; });
+  const nomesSup=[]; mensal.forEach(m=>Object.keys(m.sup).forEach(k=>{ if(m.sup[k]&&!nomesSup.includes(k)) nomesSup.push(k); }));
+  const comCusto=mensal.filter(m=>m.custo>0);
+  const _cs=mensal.filter(m=>m.parcela>0&&m.rb>0&&m.custo>0).map(m=>m.custo).sort((x,y)=>x-y); const _med=_cs.length?_cs[Math.floor(_cs.length/2)]:0;
+  const fullM=mensal.filter(m=>m.parcela>0&&m.rb>0&&m.custo>0.25*_med); /* ignora mês aberto com só um pedaço dos custos lançados */
+  const refC=fullM.length?fullM[fullM.length-1]:null; // último mês com faturamento E custos lançados
+  const ult3=fullM.slice(-3);
+  const totCusto=mensal.reduce((s,m)=>s+m.custo,0);
+  const forn=nomesSup.map(k=>{
+    const tot=mensal.reduce((s,m)=>s+(m.sup[k]||0),0);
+    const meses=mensal.filter(m=>(m.sup[k]||0)>0).length;
+    // AGFA OPEX é parcela contratual (USD × PTAX): usa o último mês com custos, o mesmo valor da projeção; os demais usam a média de 3 meses
+    const med3=(k==='AGFA-OPEX'&&refC)?(refC.sup[k]||0):(ult3.length?ult3.reduce((s,m)=>s+(m.sup[k]||0),0)/ult3.length:0);
+    const rr=rat[k]; const isAg=(k==='AGFA-OPEX'||k==='AGFA-CAPEX');
+    const tipo=isAg?(k==='AGFA-CAPEX'?'AGFA — investimento (CAPEX)':'AGFA — contrato (OPEX)'):(rr?(rr.pct>=99.99?'Dedicado (100% do cliente)':'Compartilhado (rateio)'):'Direto ao cliente (sem rateio)');
+    const com=mensal.filter(m=>(m.sup[k]||0)>0); const pri=com[0], ulc=com[com.length-1];
+    const kRef=refC?_cliChave(refC.ref):0;
+    const ativo=com.some(m=>m.parcela>0&&_cliChave(m.ref)>=kRef-2);
+    const cat=k==='AGFA-CAPEX'?'sunk':(isAg?'agfa':(rr?(rr.pct>=99.99?'ded':'comp'):'dir'));
+    const acao=k==='AGFA-CAPEX'?'SEM AÇÃO':(!ativo?'SEM AÇÃO':(cat==='ded'?'CANCELAR':(cat==='agfa'?'NEGOCIAR AGFA':(cat==='comp'?'REDISTRIBUIR':'CONFIRMAR E CANCELAR'))));
+    return {nome:k,total:tot,pctCusto:totCusto?tot/totCusto:0,meses,med3,max:Math.max(0,...mensal.map(m=>m.sup[k]||0)),tipo,pct:rr?rr.pct:null,vig:rr?rr.vig:'',
+      cat,ativo,acao,primParc:pri?pri.parcela:null,primComp:pri?pri.comp:'',ultParc:ulc?ulc.parcela:null,ultComp:ulc?ulc.comp:'',ultValor:ulc?ulc.sup[k]:0};
+  }).sort((a,b)=>b.total-a.total);
+  // contrato / projeção
+  const prazo=c&&c.prazo>0?c.prazo:0; const rolling=!!(c&&c.rolling);
+  const parcAtual=c&&c.parcela?c.parcela:(ult?ult.parcela:0);
+  const rest=(c&&c.rest!=null&&c.rest>0&&!rolling)?c.rest:0;
+  const rc=REAJUSTE_CONFIG[nome]||null; const mesReaj=rc&&rc.mes?rc.mes:0;
+  const prim=mensal.find(m=>m.parcela===1)||mensal.find(m=>m.rb>0)||null;
+  let fim='';
+  if(ult&&prazo>0&&!rolling&&c&&c.rest!=null&&c.rest>=0) fim=_cliKMM(_cliChave(ult)+c.rest);
+  // AGFA
+  const ag=[]; const PT=(typeof COTACAO_DOLAR_AGFA==='number'&&COTACAO_DOLAR_AGFA>0)?COTACAO_DOLAR_AGFA:null;
+  Object.values(AGFA_CONTRATOS).filter(x=>x.cliente===nome).forEach(x=>{
+    const ls=AGFA_LANC.filter(l=>l.cliente===nome&&l.servico===x.servico).sort((a,b)=>(a.ano*12+a.mesNum)-(b.ano*12+b.mesNum));
+    const ul=ls[ls.length-1]; const atual=ul&&ul.parcelaAtual!=null?ul.parcelaAtual:agfaParcelaAtual(x).parcelaAtual;
+    const restantes=Math.max(0,x.parcelaTotal-atual); const valor=ul?ul.valor:0;
+    ag.push({servico:x.servico,tipo:x.tipo,inicio:String(x.mesInicio).padStart(2,'0')+'/'+x.anoInicio,total:x.parcelaTotal,atual,restantes,valor,remUSD:restantes*valor,remBRLaprox:PT?restantes*valor*1.1111*PT:null,
+      fim:_cliKMM(x.anoInicio*12+x.mesInicio-1+x.parcelaTotal-1),lancs:ls});
+  });
+  const agOpexR=ag.filter(a=>a.tipo==='OPEX'); const maxRestAg=agOpexR.length?Math.max(...agOpexR.map(a=>a.restantes)):Infinity;
+  // projeção das parcelas restantes (premissas: último valor faturado, reajuste informado, custos = média 3 meses)
+  const proj=[];
+  if(ult&&rest>0){
+    const aliq=ult.rb?ult.rl/ult.rb:1; const agfaM=refC?(refC.sup['AGFA-OPEX']||0):0;
+    const med3out=ult3.length?ult3.reduce((s,m)=>s+m.custo-(m.sup['AGFA-OPEX']||0)-(m.sup['AGFA-CAPEX']||0),0)/ult3.length:0;
+    let rb=ult.rb;
+    for(let i=1;i<=rest;i++){
+      const k=_cliChave(ult)+i; if(mesReaj&&((k%12)+1)===mesReaj) rb=rb*(1+(CLI_SIM.rej||0));
+      const rl=rb*aliq; proj.push({parcela:parcAtual+i,comp:_cliKMM(k),rb,rl,agfa:(i<=maxRestAg?agfaM:0),outros:med3out,res:rl-(i<=maxRestAg?agfaM:0)-med3out});
+    }
+  }
+  const lancAg=AGFA_LANC.filter(l=>l.cliente===nome).sort((a,b)=>(a.ano*12+a.mesNum)-(b.ano*12+b.mesNum));
+  const ratLanc=RATEIO_LANC.filter(l=>(l.itens||[]).some(i=>i.cliente===nome&&(i.valor>0||i.pct>0))).sort((a,b)=>(a.ano*12+a.mes)-(b.ano*12+b.mes)).map(l=>{ const it=l.itens.find(i=>i.cliente===nome); return {comp:String(l.mes).padStart(2,'0')+'/'+l.ano,forn:l.forn,serv:l.serv,nf:l.nf||'',total:l.valorBRL!=null?l.valorBRL:l.valor,pct:it.pct,valor:it.valor}; });
+  const eqUso=EQUINIX_USO.filter(x=>x.cliente===nome), eqItem=EQUINIX_ITEM.filter(x=>x.cliente===nome);
+  const exames=mensal.filter(m=>m.exames>0).map(m=>{ const r=m.ref; const fq=r.franquiaAnual||0; return {comp:m.comp,qtde:m.exames,acum:r.examesAcum||0,franq:fq,pct:fq?(r.examesAcum||0)/fq:0,saldo:fq-(r.examesAcum||0),status:r.statusFranq||''}; });
+  return {nome,refC,rows,fat,ult,c,t,mensal,forn,rat,prazo,rolling,parcAtual,rest,fim,prim,proj,ag,lancAg,ratLanc,eqUso,eqItem,exames,ult3,mesReaj,rc};
+}
+function cliDecisao(D,S){
+  const at=D.forn.filter(f=>f.ativo&&f.cat!=='sunk');
+  const sum=c=>at.filter(f=>f.cat===c).reduce((x,f)=>x+f.med3,0);
+  const ded=sum('ded'), dir=sum('dir'), comp=sum('comp');
+  const agM=D.refC?(D.refC.sup['AGFA-OPEX']||0):0; const rlMes=D.ult?D.ult.rl:0;
+  return {ded,dir,comp,agM,rlMes,cessa:ded+dir,fica:agM+comp,pos:-(agM+comp),hoje:rlMes-(ded+dir+comp+agM)};
+}
+/* Simulador de rescisão: parcelas restantes viram perda de receita; custos que ficam dependem do tipo */
+function cliSimular(D){
+  const saidaMin=D.parcAtual, saidaMax=D.prazo||D.parcAtual;
+  let saida=CLI_SIM.saida; if(saida==null||!Number.isFinite(saida)) saida=D.parcAtual; saida=Math.min(Math.max(saida,saidaMin),saidaMax);
+  const p=D.proj.filter(x=>x.parcela>saida);
+  const rb=p.reduce((s,x)=>s+x.rb,0), rl=p.reduce((s,x)=>s+x.rl,0), outros=p.reduce((s,x)=>s+x.outros,0), res=p.reduce((s,x)=>s+x.res,0);
+  // AGFA: OPEX do cliente continua até o fim do contrato AGFA (limitado ao prazo de cada contrato)
+  const agMx=D.refC?(D.refC.sup['AGFA-OPEX']||0):0; const agOpex=D.ag.filter(a=>a.tipo==='OPEX'); const maxRest=agOpex.length?Math.max(...agOpex.map(a=>a.restantes)):(agMx>0?D.rest:0);
+  const agM=D.refC?(D.refC.sup['AGFA-OPEX']||0):0;
+  const agRem=agM*Math.max(0,maxRest-(saida-D.parcAtual));
+  const n=p.length;
+  const med=cat=>D.forn.filter(f=>f.cat===cat).reduce((s,f)=>s+f.med3,0)*n;
+  const comp=med('comp'), ded=med('ded'), dir=med('dir');
+  return {saida,saidaMin,saidaMax,n,rb,rl,outros,res,agRem,comp,ded,dir,multa:CLI_SIM.multa||0};
+}
+function renderCliente(){
+  cliDesenharLista();
+  const corpo=document.getElementById('cliCorpo'); if(!corpo) return;
+  if(CH.cliChart){ try{CH.cliChart.dispose();}catch(e){} delete CH.cliChart; }
+  const hint=document.getElementById('cliHint');
+  if(!CLI_SEL||!cliListaClientes().includes(CLI_SEL)){
+    CLI_SEL='';
+    if(hint) hint.textContent='Escolha um cliente no filtro acima para ver o que cancelar, quanto custa e o que muda.';
+    corpo.innerHTML='<div class="banner"><span>&#8505;</span><div>Escolha um cliente no filtro acima.</div></div>'; return;
+  }
+  const D=cliDados(CLI_SEL); const S=cliSimular(D); const X=cliDecisao(D,S);
+  if(hint) hint.textContent=CLI_SEL+' · dados até '+(D.refC?D.refC.comp:(D.ult?_cliMM(D.ult):'—'))+' · valores em R$ completos';
+  const R=v=>fBRL(v), N=v=>(v||0).toLocaleString('pt-BR');
+  const td=(v,cls)=>'<td'+(cls?' style="text-align:right"':'')+'>'+v+'</td>';
+  const tdb=v=>'<td style="text-align:right;font-weight:700">'+v+'</td>';
+  const neg=v=>v<0?'color:var(--neg)':'';
+  const sec=(t,info)=>'<div class="sec-title" style="margin-top:22px"><h2>'+t+'</h2>'+(info?'<span class="info-icon" onclick="toggleInfo(this,event)">i<span class="info-popover">'+info+'</span></span>':'')+'<div class="rule"></div></div>';
+  const tbl=(head,body,foot,mh)=>'<div class="tbl-wrap" style="max-height:'+(mh||460)+'px;overflow:auto"><table><thead><tr>'+head.map(h=>'<th'+(h[0]==='>'?' style="text-align:right"':'')+'>'+esc(h.replace(/^>/,''))+'</th>').join('')+'</tr></thead><tbody>'+body+'</tbody>'+(foot?'<tfoot>'+foot+'</tfoot>':'')+'</table></div>';
+  const kpi=(l,v,sub,cls)=>'<div class="kpi '+(cls||'k-navy')+'"><div class="accent"></div><div class="lbl">'+l+'</div><div class="val">'+v+'</div>'+(sub?'<div class="sub">'+sub+'</div>':'')+'</div>';
+  const st=(l,v)=>'<div class="fc-st"><div class="l">'+l+'</div><div class="v">'+v+'</div></div>';
+  const det=(t,inner,aberto)=>'<details class="cli-det"'+(aberto?' open':'')+' ontoggle="cliChartResize()"><summary>'+t+'</summary><div class="cli-det-b">'+inner+'</div></details>';
+  const t=D.t, ult=D.ult, c=D.c, info=ult||D.rows[D.rows.length-1]||{};
+  const multaF=cliMultasTotal(CLI_SEL);
+  let h='';
+
+  /* ============ 1. DECISÃO ============ */
+  h+=sec('Se o contrato for cancelado','Estimativas por mês com base na média dos últimos 3 meses com custos lançados. Dedicados e "confirmar" deixam de existir com o cancelamento; AGFA e compartilhados tendem a continuar.')+'<div class="kpi-grid">'+
+    kpi('PARCELAS RESTANTES',D.rolling?'contínuo':String(S.n),D.fim?'contrato vai até '+D.fim+' · parcela '+D.parcAtual+' de '+(D.prazo||'—'):'')+
+    kpi('RECEITA LÍQUIDA PERDIDA POR MÊS',R(X.rlMes),'total restante: '+R(S.rl),'k-neg')+
+    kpi('CUSTO MENSAL QUE CESSA',R(X.cessa),'dedicados '+R(X.ded)+' · a confirmar '+R(X.dir),'k-pos')+
+    kpi('CUSTO MENSAL QUE PERMANECE',R(X.fica),'AGFA '+R(X.agM)+' · compartilhados '+R(X.comp),'k-cost')+
+    kpi('RESULTADO MENSAL APÓS A SAÍDA',R(X.pos),'hoje: '+R(X.hoje)+' por mês',X.pos<0?'k-neg':'k-pos')+
+    kpi('AGFA A PAGAR ATÉ O FIM DO CONTRATO',R(S.agRem),'compromisso mais pesado: negociar','k-cost')+
+    kpi('COMPARTILHADOS ATÉ O FIM',R(X.comp*S.n),'redistribuídos aos outros clientes','k-cost')+
+    kpi('MULTAS INFORMADAS (FORNECEDORES)',R(multaF),'preencha na tabela abaixo','k-navy')+'</div>';
+
+  /* ============ 2. FORNECEDORES ============ */
+  const fl=D.forn.slice().sort((a,b)=>(CLI_ACAO[a.acao].ord-CLI_ACAO[b.acao].ord)||(b.med3-a.med3)||(b.total-a.total));
+  const mM=CLI_MULTAS[CLI_SEL]||{};
+  let bf='';
+  fl.forEach(f=>{
+    const ac=CLI_ACAO[f.acao]; const ate=f.acao==='SEM AÇÃO'?0:(f.cat==='agfa'?S.agRem:f.med3*S.n);
+    const parc=f.primParc==null?'—':((f.primParc>0?f.primParc:'impl.')+' a '+f.ultParc+' ('+f.meses+' meses)');
+    const mi=(f.acao==='SEM AÇÃO')?'—':'<input type="number" step="0.01" min="0" data-f="'+esc(f.nome)+'" value="'+(mM[f.nome]||'')+'" placeholder="0,00" onchange="cliMultaSet(this)" style="width:110px;text-align:right">';
+    bf+='<tr'+(f.acao==='SEM AÇÃO'?' style="opacity:.62"':'')+'><td><span class="chip" style="background:'+ac.cor+';color:#fff;font-weight:700;white-space:nowrap">'+f.acao+'</span></td><td style="font-weight:700">'+esc(f.nome)+'</td><td style="min-width:250px;white-space:normal">'+esc(cliTexto(f,D))+'</td>'+
+      td(f.acao==='SEM AÇÃO'?'—':R(f.med3),1)+td(f.pct!=null?f.pct.toLocaleString('pt-BR',{maximumFractionDigits:2})+'%':'—',1)+td(ate?R(ate):'—',1)+
+      '<td style="white-space:normal;min-width:190px">'+(f.primParc==null?'—':('parcelas '+parc+'<br><span style="color:var(--ink3)">último: parcela '+(f.ultParc>0?f.ultParc:'impl.')+' · '+f.ultComp+' · '+R(f.ultValor)+'</span>'))+'</td><td style="text-align:right">'+mi+'</td></tr>';
+  });
+  const ativosCnt=fl.filter(f=>f.acao!=='SEM AÇÃO').length;
+  h+=sec('Fornecedores: o que fazer com cada um ('+ativosCnt+' com ação)','Ordenado por prioridade. Custo mensal = média dos últimos 3 meses com custos lançados (AGFA: valor do último mês, pois é parcela contratual). "Custo até o fim" = custo mensal × parcelas restantes (AGFA: parcelas restantes do contrato AGFA). Multa: campo para você anotar o valor informado pelo fornecedor (fica salvo só neste navegador).')+
+    tbl(['Ação','Fornecedor','O que fazer','>Custo mensal (média 3 meses; AGFA = último mês)','>% rateio','>Custo até o fim do contrato','Em que parcelas o custo apareceu','>Multa informada (R$)'],bf,
+      '<tr style="font-weight:800"><td colspan="3">TOTAL (fornecedores com ação)</td>'+tdb(R(fl.filter(f=>f.acao!=='SEM AÇÃO').reduce((x,f)=>x+f.med3,0)))+'<td></td>'+tdb(R(fl.filter(f=>f.acao!=='SEM AÇÃO').reduce((x,f)=>x+(f.cat==='agfa'?S.agRem:f.med3*S.n),0)))+'<td></td>'+tdb(R(multaF))+'</tr>',620);
+
+  /* texto pronto para a gerência */
+  const lst=(a)=>fl.filter(f=>f.acao===a).map(f=>f.nome);
+  const par=[];
+  if(lst('CANCELAR').length) par.push('<b>Cancelar</b> (dedicados ao cliente): '+lst('CANCELAR').map(esc).join(', ')+' — economia de '+R(X.ded)+' por mês.');
+  if(lst('CONFIRMAR E CANCELAR').length) par.push('<b>Confirmar e cancelar</b> (custo direto sem rateio): '+lst('CONFIRMAR E CANCELAR').map(esc).join(', ')+' — '+R(X.dir)+' por mês.');
+  if(lst('NEGOCIAR AGFA').length){ const a=D.ag.find(x=>x.tipo==='OPEX'); par.push('<b>Negociar com a AGFA</b>: '+(a?'contrato '+esc(a.servico)+' com '+a.restantes+' parcelas restantes até '+a.fim+', cerca de '+R(S.agRem)+' ('+R(X.agM)+' por mês). ':'')+'Verificar multa, cessão a outro cliente ou redução.'); }
+  if(lst('REDISTRIBUIR').length) par.push('<b>Redistribuir ou reduzir</b> (compartilhados): '+lst('REDISTRIBUIR').map(esc).join(', ')+' — '+R(X.comp)+' por mês que passam aos demais clientes, salvo redução do serviço.');
+  par.push('<b>Impacto:</b> deixam de entrar '+R(X.rlMes)+' de receita líquida por mês ('+S.n+' parcelas, '+R(S.rl)+'). Após a saída o resultado mensal estimado é de '+R(X.pos)+' (hoje '+R(X.hoje)+').'+(multaF>0?' Multas informadas pelos fornecedores: '+R(multaF)+'.':' Multas ainda não informadas.'));
+  h+='<div class="panel" style="margin-top:14px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px"><b style="color:var(--navy)">Resumo para a gerência</b><button id="cliTxtBtn" class="mini-btn" onclick="cliCopiar(\'cliTxt\')" data-html2canvas-ignore="true">Copiar texto</button></div><div id="cliTxt" style="font-size:13.5px;line-height:1.6">'+par.map(p=>'<p style="margin:0 0 8px">'+p+'</p>').join('')+'</div></div>';
+
+  /* ============ 3. CONTRATO + SIMULADOR ============ */
+  const reajTxt=D.mesReaj?['','janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'][D.mesReaj]:'—';
+  h+=sec('Contrato')+'<div class="panel"><div class="fc-grid">'+
+    st('Cliente',esc(CLI_SEL))+st('CNPJ',esc(info.cnpj||'—'))+st('Contrato nº',esc((c&&c.contrato)||info.contrato||'—'))+st('Status',esc(c?c.status:'—'))+
+    st('Início (parcela 1)',D.prim?D.prim.comp:'—')+st('Parcela atual / prazo',D.parcAtual+' / '+(D.prazo||'—'))+st('Parcelas restantes',D.rolling?'contínuo':(D.rest||0))+st('Fim previsto',D.rolling?'contrato contínuo':(D.fim||'—'))+
+    st('Mês de reajuste',reajTxt)+st('Valor mensal atual (bruto)',ult?R(ult.rb):'—')+st('Valor mensal atual (líquido)',ult?R(ult.rl):'—')+st('Franquia anual (exames)',info.franquiaAnual?N(info.franquiaAnual):'—')+'</div></div>';
+  const lin=(l,v,b)=>'<tr'+(b?' style="font-weight:800"':'')+'><td>'+l+'</td><td style="text-align:right;'+neg(v)+'">'+R(v)+'</td></tr>';
+  const c0=S.res, c1=-S.res, c2=-S.agRem, c3=-(S.agRem+S.comp);
+  h+=sec('Simulador de saída','Escolha a parcela em que o cliente sai. Ordem de grandeza para discussão: não considera renegociação com fornecedores nem revenda da capacidade.')+
+    '<div class="panel" style="display:flex;gap:14px;align-items:end;flex-wrap:wrap;margin-bottom:12px" data-html2canvas-ignore="true">'+
+    '<div class="fgroup"><label>Última parcela devida (entre '+S.saidaMin+' e '+S.saidaMax+')</label><input type="number" id="cliSimSaida" min="'+S.saidaMin+'" max="'+S.saidaMax+'" value="'+S.saida+'" onchange="cliSimSet()" style="width:150px"></div>'+
+    '<div class="fgroup"><label>Reajuste anual estimado (%)</label><input type="number" step="0.01" id="cliSimRej" value="'+((CLI_SIM.rej||0)*100)+'" onchange="cliSimSet()" style="width:150px"></div>'+
+    '<div class="fgroup"><label>Multa contratual do cliente (R$), se houver</label><input type="number" step="0.01" id="cliSimMulta" value="'+(CLI_SIM.multa||0)+'" onchange="cliSimSet()" style="width:180px"></div></div>'+
+    '<div class="tbl-wrap"><table><thead><tr><th>Indicador</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+
+    '<tr><td>Parcelas restantes após a saída</td><td style="text-align:right">'+S.n+'</td></tr>'+
+    lin('Receita bruta que deixa de ser faturada',S.rb)+lin('Receita líquida que deixa de ser faturada',S.rl)+
+    lin('Custo AGFA OPEX remanescente (contrato AGFA segue)',S.agRem)+lin('Custos compartilhados projetados (redistribuídos)',S.comp)+lin('Custos dedicados ao cliente projetados (cessam)',S.ded)+lin('Outros custos diretos projetados (a confirmar)',S.dir)+
+    lin('Multa contratual do cliente informada',S.multa)+lin('Multas de fornecedores informadas (soma)',multaF)+
+    '<tr style="background:var(--line2)"><td colspan="2"><b>Cenários sobre as parcelas restantes</b></td></tr>'+
+    lin('Cenário 0 — contrato mantido: resultado projetado',c0,1)+lin('Cenário 1 — saída e todos os custos cessam: resultado perdido',c1)+
+    lin('Cenário 2 — saída; AGFA permanece, demais custos cessam',c2)+lin('Cenário 3 — saída; AGFA e custos compartilhados permanecem',c3)+
+    lin('Impacto total do cenário 3 vs. contrato mantido (inclui multas informadas)',c3-c0-S.multa-multaF,1)+'</tbody></table></div>';
+
+  /* ============ 4. DETALHES (recolhidos) ============ */
+  h+=sec('Detalhes');
+  // faturamento mensal
+  const tot={rb:0,imp:0,rl:0,custo:0,lucro:0,ex:0};
+  let b=''; D.mensal.forEach(m=>{ tot.rb+=m.rb; tot.imp+=m.imp; tot.rl+=m.rl; tot.custo+=m.custo; tot.lucro+=m.lucro; tot.ex+=m.exames;
+    b+='<tr><td>'+m.comp+'</td><td>'+(m.parcela||'<span style="color:var(--ink3)">implantação</span>')+'</td><td>'+esc(m.nf)+'</td><td>'+esc(m.pedido)+'</td>'+td(R(m.rb),1)+td(R(m.imp),1)+td(R(m.rl),1)+td(R(m.custo),1)+'<td style="text-align:right;'+neg(m.lucro)+'">'+R(m.lucro)+'</td>'+td(m.rl?fPct(m.lucro/m.rl):'—',1)+td(m.exames?N(m.exames):'—',1)+'</tr>'; });
+  const foot='<tr style="font-weight:800"><td colspan="4">TOTAL</td>'+tdb(R(tot.rb))+tdb(R(tot.imp))+tdb(R(tot.rl))+tdb(R(tot.custo))+'<td style="text-align:right;font-weight:800;'+neg(tot.lucro)+'">'+R(tot.lucro)+'</td>'+tdb(tot.rl?fPct(tot.lucro/tot.rl):'—')+tdb(N(tot.ex))+'</tr>';
+  h+=det('Faturamento: resumo e histórico mensal ('+D.fat.length+' parcelas faturadas · lucro acumulado '+R(t.lucroBruto)+')',
+    '<div class="kpi-grid" style="margin-bottom:14px">'+kpi('RECEITA BRUTA',R(t.rb),D.fat.length+' parcelas faturadas')+kpi('RECEITA LÍQUIDA',R(t.rl),'impostos: '+R(t.impostos))+kpi('CUSTOS',R(t.custo),'inclui implantação e CAPEX','k-cost')+kpi('LUCRO ACUMULADO',R(t.lucroBruto),'margem '+fPct(t.margemBruta)+((ult&&D.refC&&_cliMM(ult)!==D.refC.comp)?' · inclui '+_cliMM(ult)+' sem custos lançados':''),t.lucroBruto<0?'k-neg':'k-pos')+'</div>'+
+    '<div id="cliChart" class="chart" style="height:280px;margin-bottom:14px"></div>'+
+    tbl(['Competência','Parcela','NF','Pedido','>Receita bruta','>Impostos','>Receita líquida','>Custos','>Lucro','>Margem s/ RL','>Exames'],b,foot,520));
+  // parcelas restantes
+  if(D.proj.length){
+    let bp='', sp={rb:0,rl:0,ag:0,ou:0,rs:0}; D.proj.forEach(x=>{ sp.rb+=x.rb; sp.rl+=x.rl; sp.ag+=x.agfa; sp.ou+=x.outros; sp.rs+=x.res;
+      bp+='<tr><td>'+x.parcela+'</td><td>'+x.comp+'</td>'+td(R(x.rb),1)+td(R(x.rl),1)+td(R(x.agfa),1)+td(R(x.outros),1)+'<td style="text-align:right;'+neg(x.res)+'">'+R(x.res)+'</td></tr>'; });
+    h+=det('Parcelas restantes (projeção): '+D.proj.length+' parcelas · receita líquida '+R(sp.rl),
+      '<p class="hint" style="margin:0 0 10px">PROJEÇÃO: último valor faturado, reajuste do simulador (padrão 0%) no mês de reajuste, custo AGFA OPEX do último mês com custos e média dos demais custos dos últimos 3 meses.</p>'+
+      tbl(['Parcela','Competência','>Receita bruta','>Receita líquida','>Custo AGFA OPEX','>Demais custos','>Resultado'],bp,'<tr style="font-weight:800"><td colspan="2">TOTAL</td>'+tdb(R(sp.rb))+tdb(R(sp.rl))+tdb(R(sp.ag))+tdb(R(sp.ou))+tdb(R(sp.rs))+'</tr>',420));
+  }
+  // fornecedores x parcela
+  const cols=D.forn.map(f=>f.nome);
+  let bm=''; D.mensal.filter(m=>m.custo>0).forEach(m=>{ bm+='<tr><td>'+m.comp+'</td><td>'+(m.parcela||'impl.')+'</td>'+cols.map(k=>td(m.sup[k]?R(m.sup[k]):'<span style="color:var(--ink3)">–</span>',1)).join('')+tdb(R(m.custo))+'</tr>'; });
+  h+=det('Em que parcela cada custo caiu (fornecedor × parcela)',
+    tbl(['Competência','Parcela'].concat(cols.map(k=>'>'+k),['>Total']),bm,'<tr style="font-weight:800"><td colspan="2">TOTAL</td>'+cols.map(k=>tdb(R(D.forn.find(f=>f.nome===k).total))).join('')+tdb(R(D.forn.reduce((s,f)=>s+f.total,0)))+'</tr>',520));
+  // acumulado por fornecedor
+  let bt=''; D.forn.forEach(f=>{ bt+='<tr><td>'+esc(f.nome)+'</td><td>'+esc(f.tipo)+'</td>'+td(R(f.total),1)+td(fPct(f.pctCusto),1)+td(f.meses,1)+td(R(f.max),1)+'</tr>'; });
+  h+=det('Custo acumulado por fornecedor',tbl(['Fornecedor','Tipo de custo','>Total acumulado','>% do custo','>Meses com custo','>Maior mês'],bt,'<tr style="font-weight:800"><td colspan="2">TOTAL</td>'+tdb(R(D.forn.reduce((s,f)=>s+f.total,0)))+tdb('100%')+'<td></td><td></td></tr>',420));
+  // AGFA
+  if(D.ag.length){
+    let ba=''; D.ag.forEach(a=>{ ba+='<tr><td>'+esc(a.servico)+'</td><td>'+esc(a.tipo)+'</td><td>'+a.inicio+'</td><td>'+a.fim+'</td>'+td(a.atual+' / '+a.total,1)+td(a.restantes,1)+td(a.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})+' USD',1)+td(a.remUSD.toLocaleString('pt-BR',{minimumFractionDigits:2})+' USD',1)+td(a.remBRLaprox!=null?R(a.remBRLaprox):'—',1)+'</tr>'; });
+    h+=det('Contratos AGFA do cliente',tbl(['Serviço','Tipo','Início','Fim','>Parcela atual/total','>Restantes','>Valor mensal lançado','>Remanescente (USD)','>Remanescente (R$ aprox.)'],ba,'',300)+'<p class="hint" style="margin:8px 0 0">Em R$ (aprox.) = USD × PTAX configurada × (1 + IOF 11,11%).</p>');
+  }
+  // rateios
+  const ratKeys=Object.keys(D.rat);
+  if(ratKeys.length){
+    let br=''; ratKeys.sort().forEach(k=>{ const r=D.rat[k]; br+='<tr><td>'+esc(r.forn)+'</td><td>'+esc(r.serv)+'</td><td>'+esc(r.vig)+'</td>'+td(r.pct.toLocaleString('pt-BR',{maximumFractionDigits:4})+'%',1)+td(r.n,1)+'</tr>'; });
+    let extra=''; if(D.ratLanc.length){ let bl=''; D.ratLanc.forEach(l=>{ bl+='<tr><td>'+l.comp+'</td><td>'+esc(l.forn)+'</td><td>'+esc(l.serv)+'</td><td>'+esc(l.nf||'—')+'</td>'+td(R(l.total),1)+td(l.pct.toLocaleString('pt-BR',{maximumFractionDigits:4})+'%',1)+td(R(l.valor),1)+'</tr>'; }); extra='<div style="height:12px"></div>'+tbl(['Competência','Fornecedor','Serviço','NF','>Valor total','>% do cliente','>Valor do cliente'],bl,'',300); }
+    h+=det('Rateios vigentes do cliente',tbl(['Fornecedor','Serviço','Vigência desde','>% do cliente','>Participantes'],br,'',300)+extra);
+  }
+  // exames
+  if(D.exames.length){
+    let be=''; D.exames.forEach(e=>{ be+='<tr><td>'+e.comp+'</td>'+td(N(e.qtde),1)+td(N(e.acum),1)+td(N(e.franq),1)+td(fPct(e.pct),1)+'<td style="text-align:right;'+neg(e.saldo)+'">'+N(e.saldo)+'</td><td>'+esc(e.status)+'</td></tr>'; });
+    h+=det('Exames e franquia',tbl(['Competência','>Exames no mês','>Acumulado no ciclo','>Franquia anual','>% da franquia','>Saldo','Status'],be,'',360));
+  }
+  if(D.eqUso.length||D.eqItem.length){
+    let bq=''; D.eqUso.forEach(u=>{ bq+='<tr><td>'+String(u.mesNum||u.mes).split(' - ')[0].padStart(2,'0')+'/'+u.ano+'</td><td>Uso</td>'+td('iData frente '+N(u.idataFrente)+' · Deep fundo '+N(u.deepFundo)+' · franquia '+N(u.franquiaExames),0)+'</tr>'; });
+    D.eqItem.forEach(u=>{ bq+='<tr><td>'+String(u.mesNum||u.mes).split(' - ')[0].padStart(2,'0')+'/'+u.ano+'</td><td>'+esc(u.tipo)+'</td>'+td(R(u.valor)+' — '+esc(u.servico||''),0)+'</tr>'; });
+    h+=det('Equinix: itens e uso do cliente',tbl(['Competência','Tipo','Detalhe'],bq,'',260));
+  }
+  corpo.innerHTML=h;
+  try{
+    const ms=D.mensal.filter(m=>m.parcela>0||m.rb>0); const el=document.getElementById('cliChart'); if(el&&ms.length){
+      const cc=_buildCC();
+      chart('cliChart').setOption({tooltip:{trigger:'axis',valueFormatter:v=>fBRL(v)},legend:{data:['Receita líquida','Custos','Lucro'],textStyle:{color:cc.ink2}},grid:{left:70,right:20,top:40,bottom:50},
+        xAxis:{type:'category',data:ms.map(m=>m.comp),axisLabel:{color:cc.ink3,rotate:ms.length>24?60:0}},yAxis:{type:'value',axisLabel:{color:cc.ink3,formatter:v=>(v/1000).toLocaleString('pt-BR')+' mil'},splitLine:{lineStyle:{color:cc.line2}}},
+        dataZoom:ms.length>36?[{type:'inside'},{type:'slider',height:16,bottom:4}]:[],
+        series:[{name:'Receita líquida',type:'bar',data:ms.map(m=>Math.round(m.rl*100)/100),itemStyle:{color:'#2F5D87'}},{name:'Custos',type:'bar',data:ms.map(m=>Math.round(m.custo*100)/100),itemStyle:{color:'#C2792F'}},{name:'Lucro',type:'line',data:ms.map(m=>Math.round(m.lucro*100)/100),itemStyle:{color:'#059669'},lineStyle:{width:2}}]},true);
+    }
+  }catch(e){ console.warn('cliChart',e); }
+}
+/* Exportação: um .xlsx com uma aba por assunto (valores calculados pela mesma função da tela) */
+function cliExportar(){
+  if(!CLI_SEL){ alert('Escolha um cliente primeiro.'); return; }
+  const D=cliDados(CLI_SEL); const S=cliSimular(D);
+  const mensal=D.mensal.map(m=>({'Competência':m.comp,'Parcela':m.parcela,'NF':m.nf,'Pedido':m.pedido,'Receita bruta':m.rb,'Impostos':m.imp,'Receita líquida':m.rl,'Custos':m.custo,'Lucro':m.lucro,'Exames':m.exames}));
+  const nomeBase='Dados_'+CLI_SEL.replace(/[^A-Za-z0-9]+/g,'_')+'_'+new Date().toISOString().slice(0,10);
+  salvarTabela(mensal,nomeBase,{buildLocalWb:()=>{
+    const wb=XLSX.utils.book_new(); const add=(n,rows)=>{ if(rows&&rows.length) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),n); };
+    const c=D.c||{}; const inf=D.ult||D.rows[D.rows.length-1]||{};
+    add('Fornecedores - ação',D.forn.slice().sort((a,b)=>(CLI_ACAO[a.acao].ord-CLI_ACAO[b.acao].ord)||(b.med3-a.med3)).map(f=>({'Ação':f.acao,'Fornecedor':f.nome,'O que fazer':cliTexto(f,D),'Custo mensal (média 3 meses)':f.acao==='SEM AÇÃO'?0:f.med3,'% rateio':f.pct==null?'':f.pct,'Custo até o fim do contrato':f.acao==='SEM AÇÃO'?0:(f.cat==='agfa'?S.agRem:f.med3*S.n),'Último custo (competência)':f.ultComp,'Último custo (parcela)':f.ultParc,'Primeira parcela':f.primParc,'Multa informada (R$)':(CLI_MULTAS[CLI_SEL]||{})[f.nome]||'','Aviso prévio (dias)':'','Fim do contrato do fornecedor':'','Contato / status':''})));
+    add('Contrato',[{'Cliente':CLI_SEL,'CNPJ':inf.cnpj||'','Contrato':c.contrato||inf.contrato||'','Tipo':c.tipo||inf.tipo||'','Início':D.prim?D.prim.comp:'','Parcela atual':D.parcAtual,'Prazo':D.prazo,'Restantes':D.rest,'Fim previsto':D.fim,'Status':c.status||''}]);
+    add('Faturamento',mensal);
+    add('Parcelas restantes (proj.)',D.proj.map(x=>({'Parcela':x.parcela,'Competência':x.comp,'Receita bruta':x.rb,'Receita líquida':x.rl,'Custo AGFA OPEX':x.agfa,'Demais custos':x.outros,'Resultado':x.res})));
+    add('Fornecedores',D.forn.map(f=>({'Fornecedor':f.nome,'Tipo':f.tipo,'Total':f.total,'% do custo':f.pctCusto,'Meses':f.meses,'Média 3 meses':f.med3,'% rateio':f.pct==null?'':f.pct})));
+    const cols=D.forn.map(f=>f.nome);
+    add('Custos por parcela',D.mensal.filter(m=>m.custo>0).map(m=>{ const o={'Competência':m.comp,'Parcela':m.parcela}; cols.forEach(k=>o[k]=m.sup[k]||0); o['Total']=m.custo; return o; }));
+    add('AGFA',D.ag.map(a=>({'Serviço':a.servico,'Tipo':a.tipo,'Início':a.inicio,'Fim':a.fim,'Parcela atual':a.atual,'Total':a.total,'Restantes':a.restantes,'Valor mensal USD':a.valor,'Remanescente USD':a.remUSD,'Remanescente R$ aprox.':a.remBRLaprox==null?'':a.remBRLaprox})));
+    add('Rateios',Object.values(D.rat).map(r=>({'Fornecedor':r.forn,'Serviço':r.serv,'Vigência':r.vig,'% do cliente':r.pct,'Participantes':r.n})));
+    add('Exames',D.exames.map(e=>({'Competência':e.comp,'Exames':e.qtde,'Acumulado':e.acum,'Franquia':e.franq,'% franquia':e.pct,'Saldo':e.saldo,'Status':e.status})));
+    add('Simulador',[{'Última parcela devida':S.saida,'Parcelas restantes':S.n,'Receita bruta perdida':S.rb,'Receita líquida perdida':S.rl,'Custo AGFA remanescente':S.agRem,'Custos compartilhados':S.comp,'Custos dedicados':S.ded,'Multa contratual do cliente':S.multa,'Multas de fornecedores':cliMultasTotal(CLI_SEL),'Resultado projetado (contrato mantido)':S.res}]);
+    XLSX.writeFile(wb,nomeBase+'.xlsx');
+  }});
 }
 /* ===== Pendências do mês (Visão Operacional) — só leitura ===== */
 function renderCapaPendencias(){
@@ -8480,7 +8961,7 @@ function renderExecOrigem(){
 /* ============================================================
    v4.6 — Central de divergências, pontos fora da planilha, histórico e autoteste. Só leitura.
    ============================================================ */
-const _PG_NOME={capa:'Visão Operacional',exec:'Visão Executiva',rent:'Rentabilidade',forn:'Fornecedores',agfa:'AGFA',equinix:'Equinix',franq:'Franquia',matriz:'Matriz',dre:'DRE',comp:'Comparação',insights:'Insights',alerta:'Alertas',rateios:'Rateios',resumorat:'Resumo Rateio',contratos:'Contratos',vidacontrato:'Vida do Contrato',lanc:'Lançamentos',despesas:'Despesas',dados:'Dados',checklist:'Checklist'};
+const _PG_NOME={capa:'Visão Operacional',exec:'Visão Executiva',rent:'Rentabilidade',forn:'Fornecedores',agfa:'AGFA',equinix:'Equinix',franq:'Franquia',matriz:'Matriz',dre:'DRE',comp:'Comparação',insights:'Insights',alerta:'Alertas',rateios:'Rateios',resumorat:'Resumo Rateio',contratos:'Contratos',vidacontrato:'Vida do Contrato',lanc:'Lançamentos',despesas:'Despesas',dados:'Dados',checklist:'Checklist',cliente:'Dados por cliente'};
 
 /* Divergências AGFA lançado × base (todos os anos/meses), ainda não aceitas */
 function divergenciasAgfa(){
@@ -8715,6 +9196,7 @@ const ASK_ONDE=[
   [/franquia|exame/,'franq','Franquia de Exames','Acumulado de exames contra o limite de cada cliente.'],
   [/reajuste|vencimento|vence|prazo|renova|contrato/,'contratos','Contratos','Contratos, reajustes, vencimentos e calendário.'],
   [/vida do contrato|margem final/,'vidacontrato','Vida do Contrato','Projeção de margem até o fim de cada contrato.'],
+  [/dados por cliente|ficha|tudo do cliente|rescis/,'cliente','Dados por cliente','Escolha um cliente e veja faturamento, parcelas, custos, AGFA, rateios e simulador de rescisão.'],
   [/checklist|fechamento|fechar o mes/,'checklist','Checklist Mensal','O que falta lançar no mês: clientes, fornecedores, conferência.'],
   [/importar|backup|excel|planilha|conferi|dados|base|diverg/,'dados','Dados','Importar base, backup, conferir com o Excel e Visão por cliente.'],
   [/\bdre\b|demonstra|resultado contabil/,'dre','DRE Gerencial','Demonstração do resultado do período.'],
@@ -11482,6 +11964,8 @@ function renderEquinixCap(){
 /* ---------- FRANQUIA ---------- *//* ---------- FRANQUIA ---------- */
 function renderFranq(){
   const fr=franqAgg(filtered());
+  const VIG=franqVigencias(fr);
+  const stAt=f=>VIG[f.cliente]?VIG[f.cliente].atual.status:f.status;
   // Totais do topo: soma de exames de TODOS os clientes com franquia cadastrada — no mês vigente
   // (mesmo mês usado nas colunas da tabela) e o acumulado do ano (YTD). Clientes com contrato
   // encerrado continuam contando aqui, igual já contam na tabela — só a franquia individual deles
@@ -11489,11 +11973,13 @@ function renderFranq(){
   // totalMes: exames do mês de referência (mesVigLabel) — igual ao KPI da Visão Operacional;
   // clientes sem lançamento nesse mês contam 0 (não entra mês anterior de ninguém)
   const totalMes=fr.reduce((s,f)=>s+(f.mesQtde||0),0);
-  const totalAcum=fr.reduce((s,f)=>s+(f.acum||0),0);
+  const totalAcum=fr.reduce((s,f)=>s+(VIG[f.cliente]?VIG[f.cliente].atual.total:(f.acum||0)),0);
   const totalFranq=fr.reduce((s,f)=>s+(f.franq||0),0);
-  const nExc=fr.filter(f=>f.status==='Excedida').length;
-  const nAtt=fr.filter(f=>f.status==='Atenção').length;
-  const nOk=fr.filter(f=>f.status==='Ok').length;
+  const nExc=fr.filter(f=>stAt(f)==='Excedida').length;
+  const nAtt=fr.filter(f=>stAt(f)==='Atenção').length;
+  const nOk=fr.filter(f=>stAt(f)==='Ok').length;
+  const aCobrar=fr.map(f=>VIG[f.cliente]).filter(v=>v&&v.anterior.status==='Cobrar');
+  const nCob=aCobrar.length, examesCob=aCobrar.reduce((t,v)=>t+v.anterior.exced,0);
   // Label do mês: usa mesVigLabel (mês mais recente com exame lançado), nunca o mês do calendário
   const mesKpiLabel=fr.mesVigLabel?(fr.mesVigLabel.split(' - ')[1]||fr.mesVigLabel):'';
   const statusCard=`<div class="kpi k-navy" style="display:flex;flex-direction:column;justify-content:center">
@@ -11518,6 +12004,7 @@ function renderFranq(){
         <span style="font-size:20px;font-weight:700;font-family:var(--font-mono);color:var(--pos);line-height:1">${nOk}</span>
       </div>
     </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--ink2)">💰 Vigência anterior a cobrar: <b style="color:${nCob?'var(--neg)':'var(--ink3)'}">${nCob}</b>${nCob?' cliente(s) · +'+fNum(examesCob)+' exames excedentes':''}</div>
   </div>`;
   document.getElementById('franqKpis').innerHTML=[
     [`EXAMES NO MÊS${mesKpiLabel?' ('+mesKpiLabel+')':''}`,'',fNum(totalMes),'k-navy'],
@@ -11561,7 +12048,7 @@ function renderFranq(){
         </div>
       </div>`;
     }).join('');
-    document.getElementById('chartFranq').innerHTML=`<div style="padding:4px 0">${html||'<span style="color:var(--ink3);font-size:13px">Nenhum dado de franquia disponível.</span>'}</div>`;
+    document.getElementById('chartFranq').innerHTML=`<div style="padding:4px 0">${franqListaHtml(fr,VIG)}</div>`;
   }
   const cols=[['cliente','Cliente'],['franq','Franquia Anual'],['mesQtde',fr.mesVigLabel?`Exames ${fr.mesVigLabel.split(' - ')[1]||fr.mesVigLabel}`:'Exames no Mês'],['acum','Exames YTD'],['pct','% Atingido'],['saldo','Saldo'],['status','Status']];
   let h='<thead><tr>'+cols.map(([k,l])=>`<th>${l}</th>`).join('')+'</tr></thead><tbody>';
@@ -15525,16 +16012,59 @@ body.mob-on>*:not(#mobApp):not(#mobSheet):not(#mobCapa):not(.modal-bg):not(scrip
   }
   function vFranq(){
     var rows=ROWS.filter(function(r){return String(r.ano)===String(M.ano)&&r.natureza==='RECEITA';});
-    var L=franqAgg(rows).slice().sort(function(a,b){return b.pct-a.pct;});
-    if(!L.length) return '<div class="mb-empty">Sem franquias em '+M.ano+'.</div>';
-    var n={Excedida:0,'Atenção':0,Ok:0}; L.forEach(function(f){n[f.status]++;});
-    var h='<div class="mb-grid"><div class="mb-kpi"><div class="k">Excedidas</div><div class="v" style="color:var(--mb-neg)">'+n.Excedida+'</div></div><div class="mb-kpi"><div class="k">Em atenção (80%+)</div><div class="v" style="color:var(--mb-warn)">'+n['Atenção']+'</div></div></div>';
-    return h+L.map(function(f){ var cl=f.status==='Excedida'?'neg':f.status==='Atenção'?'warn':'pos', cor=f.status==='Excedida'?'var(--mb-neg)':f.status==='Atenção'?'var(--mb-warn)':'var(--mb-pos)';
-      return '<div class="mb-card"><div class="mb-row"><b>'+esc(f.cliente)+'</b><span class="mb-pill '+cl+'">'+fPct(f.pct,0)+' · '+f.status+'</span></div><div class="mb-bar"><i style="width:'+Math.min(100,Math.round(f.pct*100))+'%;background:'+cor+'"></i></div><div class="mb-hint">'+f.acum.toLocaleString('pt-BR')+' de '+f.franq.toLocaleString('pt-BR')+' exames · saldo '+f.saldo.toLocaleString('pt-BR')+'</div></div>'; }).join('');
+    var L0=franqAgg(rows); if(!L0.length) return '<div class="mb-empty">Sem franquias em '+M.ano+'.</div>';
+    var modo=M.franqVig||'ambas', ord={Cobrar:0,Excedida:1,'Atenção':2,Ok:3,Fechada:4};
+    var L=L0.map(function(f){return {f:f,v:franqCiclosCli(f.cliente)};}).filter(function(x){return x.v;});
+    var nE=0,nA=0,nC=0; L.forEach(function(x){ if(x.v.atual.status==='Excedida')nE++; else if(x.v.atual.status==='Atenção')nA++; if(x.v.anterior.status==='Cobrar')nC++; });
+    L.sort(function(a,b){ var ka=modo==='anterior'?ord[a.v.anterior.vazio?'Fechada':a.v.anterior.status]:Math.min(ord[a.v.atual.status],modo==='ambas'&&!a.v.anterior.vazio?ord[a.v.anterior.status]:9), kb=modo==='anterior'?ord[b.v.anterior.vazio?'Fechada':b.v.anterior.status]:Math.min(ord[b.v.atual.status],modo==='ambas'&&!b.v.anterior.vazio?ord[b.v.anterior.status]:9); return (ka-kb)||(b.v.atual.pct-a.v.atual.pct); });
+    var h='<div class="mb-grid"><div class="mb-kpi"><div class="k">Excedidas (atual)</div><div class="v" style="color:var(--mb-neg)">'+nE+'</div></div><div class="mb-kpi"><div class="k">Em atenção (80%+)</div><div class="v" style="color:var(--mb-warn)">'+nA+'</div></div></div>';
+    h+='<div class="mb-card" style="padding:10px 14px"><div class="mb-row"><span>💰 Vigência anterior a cobrar</span><b style="color:'+(nC?'var(--mb-neg)':'var(--mb-ink2)')+'">'+nC+'</b></div></div>';
+    var chip=function(k,t){ return '<button onclick="mobVig(\''+k+'\')" style="flex:1;border:1px solid var(--mb-line);border-radius:999px;padding:8px 6px;font-size:13px;font-weight:600;'+(modo===k?'background:var(--mb-acc);color:#fff;border-color:var(--mb-acc)':'background:var(--mb-card);color:var(--mb-ink2)')+'">'+t+'</button>'; };
+    h+='<div style="display:flex;gap:6px;margin:0 0 10px">'+chip('ambas','Atual + anterior')+chip('atual','Atual')+chip('anterior','Anterior')+'</div><div class="mb-hint" style="margin:0 4px 8px">Toque em um cliente para ver o gráfico de volumetria.</div>';
+    function cor(st){ return (st==='Excedida'||st==='Cobrar')?'var(--mb-neg)':st==='Atenção'?'var(--mb-warn)':st==='Fechada'?'var(--mb-ink2)':'var(--mb-pos)'; }
+    function cls(st){ return (st==='Excedida'||st==='Cobrar')?'neg':st==='Atenção'?'warn':st==='Ok'?'pos':''; }
+    function bloco(c,rot,sep){
+      var pc=Math.round(c.pct*100), t;
+      if(c.vazio) t=c.fechado?'sem lançamentos':'sem lançamentos ainda';
+      else if(c.fechado) t=c.total.toLocaleString('pt-BR')+' de '+c.franq.toLocaleString('pt-BR')+' · '+(c.exced>0?'<b style="color:var(--mb-neg)">excedente +'+c.exced.toLocaleString('pt-BR')+'</b>':'dentro da franquia');
+      else t=c.total.toLocaleString('pt-BR')+' de '+c.franq.toLocaleString('pt-BR')+' · saldo '+(-c.exced).toLocaleString('pt-BR');
+      var nome={Cobrar:'Cobrar excedente',Fechada:'Fechada'}[c.status]||c.status;
+      return '<div style="'+(sep?'margin-top:10px;padding-top:8px;border-top:1px dashed var(--mb-line)':'')+'"><div class="mb-row"><span style="font-size:12.5px;font-weight:600">'+rot+'</span><span class="mb-pill '+cls(c.status)+'">'+(c.vazio?'—':pc+'%')+' · '+nome+'</span></div><div class="mb-hint" style="margin:2px 0 0">'+c.periodo+'</div><div class="mb-bar"><i style="width:'+Math.min(100,pc)+'%;background:'+cor(c.status)+'"></i></div><div class="mb-hint">'+t+'</div></div>';
+    }
+    return h+L.map(function(x){ var v=x.v, enc=CONTRATOS_ENCERRADOS&&CONTRATOS_ENCERRADOS[x.f.cliente], b;
+      if(modo==='atual') b=bloco(v.atual,'Vigência atual');
+      else if(modo==='anterior') b=bloco(v.anterior,'Vigência anterior');
+      else b=bloco(v.atual,'Vigência atual')+((v.anterior.vazio&&enc)?'':bloco(v.anterior,'Vigência anterior',1));
+      return '<div class="mb-card" data-c="'+esc(x.f.cliente)+'" onclick="mobFranq(this.dataset.c)" style="cursor:pointer;'+(enc?'opacity:.65':'')+'"><div class="mb-row" style="margin-bottom:6px"><b>'+esc(x.f.cliente)+(enc?' <span class="mb-hint" style="display:inline">(encerrado)</span>':'')+'</b><span style="font-size:12px;color:var(--mb-acc)">📊 volumetria ›</span></div>'+b+'</div>'; }).join('');
   }
+  function svgVol(v){
+    var A=v.anterior.meses, B=v.atual.meses, W=340,H=190,pl=36,pr=4,pt=10,pb=22, vals=[];
+    A.concat(B).forEach(function(m){ if(m.vol!=null) vals.push(m.vol); });
+    if(!vals.length) return '<div class="mb-hint">Sem volumetria lançada.</div>';
+    var mx=Math.max.apply(null,vals), gw=(W-pl-pr)/12, bw=Math.max(4,(gw-4)/2), Y=function(x){return pt+(1-x/mx)*(H-pt-pb);};
+    var fm=function(x){return x>=1e6?(x/1e6).toFixed(1)+'M':x>=1e3?(x/1e3).toFixed(0)+'k':String(Math.round(x));}, g='';
+    [mx,mx/2,0].forEach(function(x){ g+='<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+Y(x).toFixed(1)+'" y2="'+Y(x).toFixed(1)+'" stroke="currentColor" stroke-opacity=".15"/><text x="'+(pl-4)+'" y="'+(Y(x)+3).toFixed(1)+'" text-anchor="end" font-size="9" fill="currentColor" opacity=".65">'+fm(x)+'</text>'; });
+    for(var i=0;i<12;i++){ var x0=pl+i*gw+1;
+      if(A[i].vol!=null) g+='<rect x="'+x0.toFixed(1)+'" y="'+Y(A[i].vol).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(H-pb-Y(A[i].vol)).toFixed(1)+'" fill="#d98a14" rx="1.5"/>';
+      if(B[i].vol!=null) g+='<rect x="'+(x0+bw+1).toFixed(1)+'" y="'+Y(B[i].vol).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(H-pb-Y(B[i].vol)).toFixed(1)+'" fill="#2a78d6" rx="1.5"/>';
+      g+='<text x="'+(x0+bw).toFixed(1)+'" y="'+(H-7)+'" text-anchor="middle" font-size="8.5" fill="currentColor" opacity=".7">'+FQ_NM[A[i].mn-1].slice(0,3)+'</text>'; }
+    return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block">'+g+'</svg><div class="mb-hint" style="display:flex;gap:14px;margin-top:4px"><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#d98a14;margin-right:5px"></i>Anterior</span><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#2a78d6;margin-right:5px"></i>Atual</span></div>';
+  }
+  window.mobVig=function(k){ M.franqVig=k; draw(); };
+  window.mobFranq=function(cli){ try{
+    var v=franqCiclosCli(cli); if(!v) return; var A=v.anterior, B=v.atual, u=v.ultMes, p=v.penMes, nf=function(n){return n==null?'—':n.toLocaleString('pt-BR');};
+    var d=(u&&p&&p.vol)?((u.vol-p.vol)/p.vol*100):null;
+    var h='<button class="x" onclick="mobSheet(false)" aria-label="Fechar">✕</button><h3>Volumetria — '+esc(cli)+'</h3>';
+    h+='<p style="margin:0 0 8px"><b>Último mês com dados:</b> '+(u?u.label+' · '+nf(u.vol)+' exames'+(d!=null?' ('+(d>=0?'+':'')+d.toFixed(1).replace('.',',')+'% vs '+p.label+')':''):'nenhum')+'</p>';
+    h+='<p style="margin:0 0 8px;font-size:13px"><b>Anterior</b> '+A.periodo+': '+nf(A.total)+' de '+nf(A.franq)+(A.vazio?' · sem lançamentos':A.exced>0?' · <b style="color:#d93a3a">excedente +'+nf(A.exced)+'</b>':' · dentro da franquia')+'<br><b>Atual</b> '+B.periodo+': '+(B.vazio?'sem lançamentos ainda':nf(B.total)+' de '+nf(B.franq)+' ('+Math.round(B.pct*100)+'%)')+'</p>';
+    h+=svgVol(v)+'<table style="margin-top:10px"><thead><tr><th style="text-align:left">Mês</th><th style="text-align:right">Anterior</th><th style="text-align:right">Atual</th></tr></thead><tbody>';
+    for(var i=0;i<12;i++) h+='<tr><td>'+FQ_NM[A.meses[i].mn-1]+'</td><td style="text-align:right">'+nf(A.meses[i].vol)+'</td><td style="text-align:right">'+nf(B.meses[i].vol)+'</td></tr>';
+    h+='</tbody></table>';
+    document.getElementById('mobSheetBody').innerHTML=h; mobSheet(true); }catch(e){ console.warn('mobFranq',e); } };
   function alertas(){
     var A=[];
     try{ franqAgg(ROWS.filter(function(r){return String(r.ano)===String(new Date().getFullYear())&&r.natureza==='RECEITA';})).filter(function(f){return f.status!=='Ok';}).sort(function(a,b){return b.pct-a.pct;}).forEach(function(f){ A.push([f.status==='Excedida'?'neg':'warn','Franquia',f.cliente+': '+fPct(f.pct,0)+' da franquia ('+f.acum.toLocaleString('pt-BR')+' de '+f.franq.toLocaleString('pt-BR')+')']); }); }catch(e){}
+    try{ franqAgg(ROWS.filter(function(r){return r.natureza==='RECEITA';})).forEach(function(f){ var v=franqCiclosCli(f.cliente); if(v&&v.anterior.status==='Cobrar') A.push(['neg','Franquia',f.cliente+': vigência anterior ('+v.anterior.periodo+') excedeu +'+v.anterior.exced.toLocaleString('pt-BR')+' exames — cobrar']); }); }catch(e){}
     try{ contractAggCached().filter(function(c){return c.status==='Encerrando'||c.status==='Atenção';}).sort(function(a,b){return (a.rest||0)-(b.rest||0);}).forEach(function(c){ A.push([c.status==='Encerrando'?'neg':'warn','Contrato',c.cliente+': '+c.status.toLowerCase()+(c.prazo?' — parcela '+c.parcela+' de '+c.prazo:'')]); }); }catch(e){}
     if(!isCom()){
       try{ divergenciasAgfa().forEach(function(d){ A.push(['warn','AGFA',d.cli+' '+MN[d.mes-1]+'/'+d.ano+': lançado '+fUSD(d.lanc)+' × base '+fUSD(d.base)]); }); }catch(e){}
