@@ -1878,6 +1878,7 @@ html.ui2 #capaHero{margin-top:4px}
       <div class="panel"><div id="chartEvol" class="chart tall" _echarts_instance_="ec_1790619289610" style="user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); position: relative;"><div style="position: relative; width: 1383px; height: 380px; padding: 0px; margin: 0px; border-width: 0px;"><canvas data-zr-dom-id="zr_0" width="1535" height="421" style="position: absolute; left: 0px; top: 0px; width: 1383px; height: 380px; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); padding: 0px; margin: 0px; border-width: 0px;"></canvas></div><div class=""></div></div></div>
     </div>
 
+    <div id="execAgfaVar" data-hide-comercial="" style="margin-top:14px"></div>
     <div class="grid-2" style="margin-top:14px" data-hide-comercial="">
       <div class="panel"><h3>Evolução da margem</h3><div class="psub">Margem Bruta e Líquida mês a mês, em % — mostra se a rentabilidade está melhorando, independente do tamanho da receita</div><div id="chartMargemEvol" class="chart" _echarts_instance_="ec_1790619289611" style="user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); position: relative;"><div style="position: relative; width: 666px; height: 320px; padding: 0px; margin: 0px; border-width: 0px;"><canvas data-zr-dom-id="zr_0" width="739" height="355" style="position: absolute; left: 0px; top: 0px; width: 666px; height: 320px; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); padding: 0px; margin: 0px; border-width: 0px;"></canvas></div><div class=""></div></div></div>
       <div class="panel"><h3>Receita por tipo de contrato</h3><div class="psub">Composição da receita bruta mês a mês — mostra se a carteira está diversificando ou concentrando num tipo</div><div id="chartTipoEvol" class="chart" _echarts_instance_="ec_1790619289612" style="user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); position: relative;"><div style="position: relative; width: 665px; height: 320px; padding: 0px; margin: 0px; border-width: 0px;"><canvas data-zr-dom-id="zr_0" width="738" height="355" style="position: absolute; left: 0px; top: 0px; width: 665px; height: 320px; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); padding: 0px; margin: 0px; border-width: 0px;"></canvas></div><div class=""></div></div></div>
@@ -5095,7 +5096,7 @@ function render(){
 }
 
 /* ---------- VISÃO EXECUTIVA ---------- */
-function renderExec(){ try{ renderExecOrigem(); }catch(e){} return _renderExecBase(); }
+function renderExec(){ try{ renderExecOrigem(); }catch(e){} try{ renderExecAgfaVar(); }catch(e){} return _renderExecBase(); }
 function _renderExecBase(){
   // Alinha com a DRE: restringe aos meses que têm receita lançada no ano selecionado, evitando
   // que despesas de meses sem receita (FOLHA/DESP GERAL) entrem no cálculo e causem divergência.
@@ -6288,6 +6289,64 @@ function equinixCliResumo(hist,mesVig,anoSel){
     +kp('Custo no ano',fBRL(h.total))+kp('Custo em '+(mesVig?_mesCurto(mesVig)+'/'+String(anoSel).slice(2):'—'),fBRL(vMes))+kp('Média mensal',fBRL(nM?h.total/nM:0),nM+' meses com custo')+kp('% do custo Equinix',fPct(totAll?h.total/totAll:0),'do total de clientes no ano')+'</div></div>';
 }
 
+/* ===== Visão Executiva: por que o custo AGFA variou de um mês para o outro ===== */
+let EXEC_AGFA_SEL=null; // {ano,mes} escolhido no painel
+function execAgfaVarSel(v){ const p=String(v).split('-'); EXEC_AGFA_SEL={ano:+p[0],mes:+p[1]}; renderExecAgfaVar(); }
+function execAgfaVarDados(ano,mes){
+  const pa=mes===1?ano-1:ano, pm=mes===1?12:mes-1, cli=FILT.cliente||'';
+  const agr=(a,m)=>{ const o={}; AGFA_LANC.filter(l=>l.ano===a&&l.mesNum===m&&(!cli||l.cliente===cli)).forEach(l=>{ const k=l.cliente+'||'+l.servico+'||'+l.tipo;
+    const x=o[k]||(o[k]={cliente:l.cliente,servico:l.servico,tipo:l.tipo,v:0,pa:null,pt:null}); x.v+=l.valor; if(l.parcelaAtual!=null){ x.pa=l.parcelaAtual; x.pt=l.parcelaTotal; } }); return o; };
+  const A=agr(pa,pm), B=agr(ano,mes), linhas=[];
+  new Set([...Object.keys(A),...Object.keys(B)]).forEach(k=>{
+    const a=A[k], b=B[k], o=b||a, va=a?a.v:0, vb=b?b.v:0, d=vb-va; if(Math.abs(d)<0.005) return;
+    let causa, txt;
+    if(!a){ if(o.tipo==='CAPEX'){ causa='novoCapex'; txt='CAPEX novo no mês (pagamento pontual'+(b.pt?', parcela '+b.pa+'/'+b.pt:'')+')'; }
+            else{ causa='novoOpex'; txt='Nova mensalidade OPEX começou'+(b.pa!=null?' (parcela '+b.pa+'/'+b.pt+')':''); } }
+    else if(!b){ const fim=a.pa!=null&&a.pt!=null&&a.pa>=a.pt;
+      if(fim){ causa='fim'; txt='Terminou: a última parcela ('+a.pa+'/'+a.pt+') foi no mês anterior'; }
+      else if(o.tipo==='CAPEX'){ causa='fim'; txt='CAPEX pontual do mês anterior, não se repete'; }
+      else{ causa='semLanc'; txt='Sem lançamento neste mês — conferir se falta lançar'; } }
+    else{ causa='ajuste'; txt=d>0?'Valor maior que no mês anterior (ampliação, reajuste ou mais de uma parcela no mês)':'Valor menor que no mês anterior'; }
+    linhas.push({cliente:o.cliente,servico:o.servico,tipo:o.tipo,va,vb,d,causa,txt});
+  });
+  linhas.sort((x,y)=>Math.abs(y.d)-Math.abs(x.d));
+  const tot=(O,t)=>Object.values(O).filter(x=>!t||x.tipo===t).reduce((s,x)=>s+x.v,0);
+  return {pa,pm,linhas,ant:{tot:tot(A),opex:tot(A,'OPEX'),capex:tot(A,'CAPEX')},atu:{tot:tot(B),opex:tot(B,'OPEX'),capex:tot(B,'CAPEX')}};
+}
+function renderExecAgfaVar(){
+  const box=document.getElementById('execAgfaVar'); if(!box) return;
+  try{
+    if(!paginaPermitida('forn')){ box.innerHTML=''; return; }
+    const ano=+(FILT.ano||anosDisponiveis()[0]||new Date().getFullYear());
+    const mesesComLanc=[...new Set(AGFA_LANC.filter(l=>l.ano===ano).map(l=>l.mesNum))].sort((a,b)=>a-b);
+    if(!mesesComLanc.length){ box.innerHTML=''; return; }
+    let mes=FILT.mes?MESES.indexOf(FILT.mes)+1:0;
+    if(!mes&&EXEC_AGFA_SEL&&EXEC_AGFA_SEL.ano===ano&&mesesComLanc.includes(EXEC_AGFA_SEL.mes)) mes=EXEC_AGFA_SEL.mes;
+    if(!mes) mes=mesesComLanc[mesesComLanc.length-1];
+    const D=execAgfaVarDados(ano,mes);
+    const PT=(typeof COTACAO_DOLAR_AGFA==='number'&&COTACAO_DOLAR_AGFA>0)?COTACAO_DOLAR_AGFA:null;
+    const rot=(a,m)=>_mesCurto(m)+'/'+String(a).slice(2), rA=rot(D.pa,D.pm), rN=rot(ano,mes);
+    const dv=D.atu.tot-D.ant.tot, pc=D.ant.tot?dv/D.ant.tot:null, cor=dv>0?'#DC2626':(dv<0?'#059669':'var(--ink3)');
+    const sg=v=>(v>0?'+':v<0?'−':'')+fUSD(Math.abs(v));
+    const brl=v=>PT?' <span style="color:var(--ink3);font-size:11px">≈ '+(v<0?'−':'')+fBRL(Math.abs(v)*PT*_IOF_AG)+'</span>':'';
+    const G={novoCapex:['CAPEX novo (pagamento pontual)','#D97706'],novoOpex:['Novas mensalidades OPEX','#DC2626'],ajuste:['Mudança de valor em serviços que já existiam','#2563EB'],fim:['Serviços/parcelas que terminaram','#059669'],semLanc:['Sem lançamento no mês (conferir)','#7C3AED']};
+    const ordem=['novoCapex','novoOpex','ajuste','fim','semLanc'];
+    const grp=ordem.map(k=>({k,ls:D.linhas.filter(l=>l.causa===k)})).filter(g=>g.ls.length);
+    const chips=grp.map(g=>{ const s=g.ls.reduce((t,l)=>t+l.d,0); return '<div style="flex:1;min-width:190px;border:1px solid var(--line2);border-left:4px solid '+G[g.k][1]+';border-radius:8px;padding:8px 12px"><div style="font-size:11px;color:var(--ink3);font-weight:700">'+G[g.k][0].toUpperCase()+'</div><div class="mono" style="font-size:16px;font-weight:700;color:'+(s>0?'#DC2626':'#059669')+'">'+sg(s)+'</div><div style="font-size:11px;color:var(--ink3)">'+g.ls.length+' item(ns)'+(PT?' · ≈ '+(s<0?'−':'')+fBRL(Math.abs(s)*PT*_IOF_AG):'')+'</div></div>'; }).join('');
+    const linha=l=>'<tr><td style="text-align:left">'+esc(l.cliente)+'</td><td style="text-align:left">'+esc(l.servico)+'</td><td><span class="chip '+(l.tipo==='CAPEX'?'warn':'pos')+'">'+esc(l.tipo)+'</span></td><td class="mono">'+(l.va?fUSD(l.va):'—')+'</td><td class="mono">'+(l.vb?fUSD(l.vb):'—')+'</td><td class="mono" style="font-weight:700;color:'+(l.d>0?'#DC2626':'#059669')+'">'+sg(l.d)+'</td><td style="font-size:12px;text-align:left"><span style="color:'+G[l.causa][1]+';font-weight:700">●</span> '+esc(l.txt)+'</td></tr>';
+    const th='<thead><tr><th>Cliente</th><th>Serviço</th><th>Tipo</th><th>'+rA+'</th><th>'+rN+'</th><th>Variação</th><th>Motivo</th></tr></thead>';
+    const top=D.linhas.slice(0,12), resto=D.linhas.slice(12);
+    const sel='<select onchange="execAgfaVarSel(this.value)" style="padding:3px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px"'+(FILT.mes?' disabled title="Mês definido pelo filtro do topo"':'')+'>'+mesesComLanc.map(m=>'<option value="'+ano+'-'+m+'"'+(m===mes?' selected':'')+'>'+rot(ano,m)+'</option>').join('')+'</select>';
+    const frase=D.linhas.length?('A variação de <b style="color:'+cor+'">'+sg(dv)+'</b> ('+(pc==null?'—':(pc>=0?'+':'')+(pc*100).toFixed(1).replace('.',',')+'%')+') vem de '+grp.map(g=>{ const s=g.ls.reduce((t,l)=>t+l.d,0); return '<b>'+G[g.k][0].toLowerCase().replace('opex','OPEX').replace('capex','CAPEX')+'</b> ('+sg(s)+')'; }).join(', ')+'.'):'Sem variação de valor entre os dois meses.';
+    box.innerHTML='<div class="panel" style="padding:14px 18px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px"><h3 style="margin:0;font-size:15px">AGFA — por que o custo variou de '+rA+' para '+rN+'?</h3><span style="margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink3)">Mês analisado '+sel+'<button class="mini-btn" onclick="irAgfaCliente(FILT.cliente||\'\')">Abrir AGFA ›</button></span></div>'
+      +'<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:baseline;margin-bottom:8px"><span><span style="font-size:11px;color:var(--ink3)">'+rA+'</span> <b class="mono" style="font-size:18px">'+fUSD(D.ant.tot)+'</b>'+brl(D.ant.tot)+'</span><span style="font-size:18px;color:var(--ink3)">→</span><span><span style="font-size:11px;color:var(--ink3)">'+rN+'</span> <b class="mono" style="font-size:18px">'+fUSD(D.atu.tot)+'</b>'+brl(D.atu.tot)+'</span><span class="mono" style="font-weight:700;color:'+cor+'">'+sg(dv)+brl(dv)+'</span></div>'
+      +'<div style="font-size:12px;color:var(--ink3);margin-bottom:8px">OPEX: '+fUSD(D.ant.opex)+' → '+fUSD(D.atu.opex)+' ('+sg(D.atu.opex-D.ant.opex)+') · CAPEX: '+fUSD(D.ant.capex)+' → '+fUSD(D.atu.capex)+' ('+sg(D.atu.capex-D.ant.capex)+')</div>'
+      +'<div style="font-size:13px;margin-bottom:10px">'+frase+'</div>'
+      +(chips?'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">'+chips+'</div>':'')
+      +(D.linhas.length?'<div class="tbl-wrap"><table>'+th+'<tbody>'+top.map(linha).join('')+'</tbody></table></div>'+(resto.length?'<details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:var(--ink3)">Ver os outros '+resto.length+' item(ns)</summary><div class="tbl-wrap"><table>'+th+'<tbody>'+resto.map(linha).join('')+'</tbody></table></div></details>':''):'')
+      +'<div class="hint" style="margin-top:8px">Valores em US$ conforme os lançamentos da AGFA'+(PT?'; R$ aproximado por PTAX '+PT.toLocaleString('pt-BR',{minimumFractionDigits:4})+' × IOF':'')+'. Um mesmo serviço pode ter parcela dupla no mês (ex.: acerto), o que aparece como "valor maior".</div></div>';
+  }catch(e){ console.warn('execAgfaVar',e); box.innerHTML=''; }
+}
 /* ---------- MATRIZ CLIENTE x FORNECEDOR ---------- */
 /* Desmembra fornecedores consolidados (ex.: 'HYLINK') por serviço, só para EXIBIÇÃO. Os lançamentos de rateio
    guardam o serviço (l.key = 'HYLINK - NOC'); a linha da base só traz o total consolidado. A divisão
