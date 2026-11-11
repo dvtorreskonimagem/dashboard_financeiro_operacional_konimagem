@@ -16269,7 +16269,7 @@ body.mob-on>*:not(#mobApp):not(#mobSheet):not(#mobCapa):not(.modal-bg):not(scrip
     if(!sel.length) return h+'<div class="mb-empty">Nenhum contrato neste filtro.</div>';
     return h+sel.map(function(c){ var cl=c.status==='Encerrando'?'neg':c.status==='Atenção'?'warn':c.status==='Encerrado'?'':'pos';
       var prog=c.rolling?'Contrato contínuo (prazo rolante)':(c.prazo>0?'Parcela '+c.parcela+' de '+c.prazo+(c.rest!=null&&c.rest>=0?' · faltam '+c.rest:''):'Sem prazo definido');
-      return '<div class="mb-card"><div class="mb-row"><b>'+esc(c.cliente)+'</b><span class="mb-pill '+cl+'">'+c.status+'</span></div><div class="mb-hint">'+esc(c.tipo||'')+' · '+prog+'</div>'+(c.prazo>0&&!c.rolling?'<div class="mb-bar"><i style="width:'+Math.min(100,Math.round((c.parcela/c.prazo)*100))+'%"></i></div>':'')+(c.reaj?'<div class="mb-hint">Reajuste: '+esc(String(c.reaj))+'</div>':'')+'</div>'; }).join('');
+      return '<div class="mb-card" data-c="'+esc(c.cliente)+'" onclick="mobCli(this.dataset.c)" style="cursor:pointer"><div class="mb-row"><b>'+esc(c.cliente)+'</b><span class="mb-pill '+cl+'">'+c.status+'</span></div><div class="mb-hint">'+esc(c.tipo||'')+' · '+prog+'</div>'+(c.prazo>0&&!c.rolling?'<div class="mb-bar"><i style="width:'+Math.min(100,Math.round((c.parcela/c.prazo)*100))+'%"></i></div>':'')+(c.reaj?'<div class="mb-hint">Reajuste: '+esc(String(c.reaj))+'</div>':'')+(can('forn')?'<div class="mb-hint" style="color:var(--mb-acc);margin-top:6px">Toque para ver o resumo do cliente ›</div>':'')+'</div>'; }).join('');
   }
   function vFranq(){
     var rows=ROWS.filter(function(r){return String(r.ano)===String(M.ano)&&r.natureza==='RECEITA';});
@@ -16528,6 +16528,61 @@ body.mob-on>*:not(#mobApp):not(#mobSheet):not(#mobCapa):not(.modal-bg):not(scrip
     o.insertAdjacentHTML('afterbegin','<div class="ak-par"><div class="ak-me">'+esc(t)+'</div><div>'+r+'</div></div>');
     if(i){ i.value=''; }
   };
+  /* ---- Resumo do cliente no celular (aberto pela aba Contratos) ---- */
+  window.mobCli=function(nome,anoSel,mesSel){ try{
+    var fin=can('forn'), c=(contractAggCached().filter(function(x){return x.cliente===nome;})[0])||{};
+    var todas=ROWS.filter(function(r){return r.cliente===nome&&r.natureza==='RECEITA'&&r.segmento==='CLIENTE';});
+    var anosC=[]; todas.forEach(function(r){ if(anosC.indexOf(r.ano)<0) anosC.push(r.ano); }); anosC.sort(function(a,b){return b-a;});
+    var ano=(anoSel&&anosC.indexOf(+anoSel)>=0)?+anoSel:(anosC.indexOf(+M.ano)>=0?+M.ano:(anosC[0]||+M.ano));
+    var raAno=todas.filter(function(r){return r.ano===ano;}), mesesAno=[]; raAno.forEach(function(r){ if(mesesAno.indexOf(r.mesNum)<0) mesesAno.push(r.mesNum); }); mesesAno.sort(function(a,b){return a-b;});
+    var mes=(+mesSel&&mesesAno.indexOf(+mesSel)>=0)?+mesSel:0, ra=mes?raAno.filter(function(r){return r.mesNum===mes;}):raAno;
+    var RED='#DC2626', GRN='#059669', AMB='#D97706', LN='rgba(128,128,128,.28)', SUB='opacity:.65;font-size:12px';
+    var st=c.status, cl=st==='Encerrando'?RED:st==='Atenção'?AMB:st==='Encerrado'?'inherit':GRN;
+    var h='<button class="x" onclick="mobSheet(false)" aria-label="Fechar">✕</button><h3>'+esc(nome)+'</h3>';
+    h+='<div style="margin:-2px 0 10px;font-size:13px"><b style="color:'+cl+'">'+esc(st||'')+'</b> · '+esc(c.tipo||'')+(c.rolling?' · contrato contínuo':(c.prazo>0?' · parcela '+c.parcela+' de '+c.prazo+(c.rest!=null&&c.rest>=0?' (faltam '+c.rest+')':''):''))+'</div>';
+    if(!fin){ h+='<div style="'+SUB+'">Seu perfil não tem acesso aos valores financeiros do cliente.</div>'; document.getElementById('mobSheetBody').innerHTML=h; mobSheet(true); return; }
+    var ss='font-size:16px;padding:8px 10px;border:1px solid '+LN+';border-radius:10px;background:transparent;color:inherit;flex:1';
+    h+='<div style="display:flex;gap:8px;margin-bottom:12px"><select style="'+ss+'" onchange="mobCli(\''+esc(nome)+'\',this.value,'+mes+')">'+anosC.map(function(a){return '<option'+(a===ano?' selected':'')+'>'+a+'</option>';}).join('')+'</select><select style="'+ss+'" onchange="mobCli(\''+esc(nome)+'\','+ano+',this.value)"><option value="0">Todos os meses</option>'+mesesAno.map(function(m){return '<option value="'+m+'"'+(m===mes?' selected':'')+'>'+_mesCurto(m)+'</option>';}).join('')+'</select></div>';
+    var rb=0,rl=0,cu=0,sup={},supN={},pm={},pmF={};
+    raAno.forEach(function(r){ var m=pm[r.mesNum]||(pm[r.mesNum]={rb:0,rl:0,cu:0}); m.rb+=r.rb||0; m.rl+=r.rl||0; m.cu+=r.custoTotal||0; });
+    ra.forEach(function(r){ rb+=r.rb||0; rl+=r.rl||0; cu+=r.custoTotal||0; if((r.rb||0)>0) pmF[r.mesNum]=1;
+      Object.keys(r.sup||{}).forEach(function(k){ var v=r.sup[k]; if(!v) return; sup[k]=(sup[k]||0)+v; (supN[k]=supN[k]||{})[r.mesNum]=1; }); });
+    var lucro=rl-cu, mc=rl>0?lucro/rl:0, mcc=lucro<0?RED:GRN, nFat=Object.keys(pmF).length;
+    var box=function(l,v,col){ return '<div style="flex:1 1 calc(50% - 8px);min-width:140px;box-sizing:border-box;border:1px solid '+LN+';border-radius:12px;padding:8px 12px"><div style="'+SUB+';font-weight:700;text-transform:uppercase;font-size:10.5px;letter-spacing:.03em">'+l+'</div><div style="font-weight:700;font-size:16px;'+(col?'color:'+col:'')+'">'+v+'</div></div>'; };
+    h+='<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px">'+box('Receita bruta',fBRL(rb))+box('Receita líquida',fBRL(rl))+box('Custos totais',fBRL(cu))+box('Lucro bruto',fBRL(lucro),mcc)+box('Margem (sobre RL)',fPct(mc),mcc)+box('Meses faturados',nFat)+'</div>';
+    // franquia
+    try{ var fv=franqCiclosCli(nome); if(fv){ var a=fv.atual, p=fv.anterior; h+='<div style="margin:8px 0;font-size:13px"><b>Franquia</b> · atual '+(a.vazio?'sem lançamentos':Math.round(a.pct*100)+'% ('+a.total.toLocaleString('pt-BR')+' de '+a.franq.toLocaleString('pt-BR')+')')+(p.vazio?'':' · anterior '+(p.exced>0?'<b style="color:'+RED+'">excedeu +'+p.exced.toLocaleString('pt-BR')+'</b>':'dentro'))+'</div>'; } }catch(e){}
+    // fornecedores
+    var lAgAll=AGFA_LANC.filter(function(l){return l.cliente===nome;});
+    var temAg=lAgAll.length||Object.keys(AGFA_CONTRATOS).some(function(k){return AGFA_CONTRATOS[k].cliente===nome;});
+    if(temAg) ['AGFA-OPEX','AGFA-CAPEX'].forEach(function(k){ if(!(k in sup)){ sup[k]=0; supN[k]={}; } });
+    var usd={OPEX:0,CAPEX:0}, usdAno={OPEX:0,CAPEX:0};
+    lAgAll.forEach(function(l){ if(l.ano!==ano) return; usdAno[l.tipo]=(usdAno[l.tipo]||0)+l.valor; if(!mes||l.mesNum===mes) usd[l.tipo]=(usd[l.tipo]||0)+l.valor; });
+    var nm={'AGFA-OPEX':'AGFA OPEX (SMA)','AGFA-CAPEX':'AGFA CAPEX'}, ks=Object.keys(sup).sort(function(a,b){return sup[b]-sup[a];});
+    h+='<div style="font-weight:700;margin:14px 0 6px">Quanto gasta com cada fornecedor</div>';
+    ks.forEach(function(k){ var v=sup[k], n=Object.keys(supN[k]).length, tp=k==='AGFA-OPEX'?'OPEX':k==='AGFA-CAPEX'?'CAPEX':'', sub='';
+      if(tp) sub=v>0?fUSD(usd[tp]):('sem custo neste período'+(mes&&usdAno[tp]?' · no ano: '+fUSD(usdAno[tp]):''));
+      else if(n>1) sub=n+' meses · média '+fBRL(v/n);
+      h+='<div style="padding:7px 0;border-top:1px solid '+LN+'"><div style="display:flex;justify-content:space-between;gap:8px"><span><b>'+esc(nm[k]||k)+'</b>'+(sub?'<div style="'+SUB+'">'+sub+'</div>':'')+'</span><span style="text-align:right;white-space:nowrap">'+(v>0?'<b>'+fBRL(v)+'</b><div style="'+SUB+'">'+fPct(cu?v/cu:0)+' dos custos</div>':'<span style="opacity:.5">—</span>')+'</span></div>'+(v>0?'<div style="height:5px;border-radius:3px;background:'+LN+';margin-top:5px"><i style="display:block;height:100%;border-radius:3px;background:#2a78d6;width:'+Math.min(100,Math.round(cu?v/cu*100:0))+'%"></i></div>':'')+'</div>'; });
+    if(!ks.length) h+='<div style="'+SUB+'">Sem custos de fornecedor lançados neste período.</div>';
+    // AGFA serviços
+    var svcs=[]; lAgAll.forEach(function(l){ if(svcs.indexOf(l.servico)<0) svcs.push(l.servico); }); Object.keys(AGFA_CONTRATOS).forEach(function(k){ var x=AGFA_CONTRATOS[k]; if(x.cliente===nome&&svcs.indexOf(x.servico)<0) svcs.push(x.servico); });
+    if(svcs.length){
+      h+='<div style="font-weight:700;margin:14px 0 6px">AGFA — serviços (US$)</div>';
+      svcs.forEach(function(sv){ var ls=lAgAll.filter(function(l){return l.servico===sv;}).sort(function(x,y){return (x.ano*12+x.mesNum)-(y.ano*12+y.mesNum);}), ul=ls[ls.length-1], tipo=ul?ul.tipo:'', at=ul&&ul.parcelaAtual!=null?ul.parcelaAtual:0, tot=ul?ul.parcelaTotal:0,
+        per=ls.filter(function(l){return l.ano===ano&&(!mes||l.mesNum===mes);}).reduce(function(s,l){return s+l.valor;},0), rest=Math.max(0,(tot||0)-at);
+        h+='<div style="padding:6px 0;border-top:1px solid '+LN+';display:flex;justify-content:space-between;gap:8px"><span>'+esc(sv)+'<div style="'+SUB+'"><b style="color:'+(tipo==='CAPEX'?AMB:GRN)+'">'+esc(tipo)+'</b> · parcela '+String(at).padStart(2,'0')+'/'+String(tot||0).padStart(2,'0')+(rest&&ul?' · a pagar '+fUSD(rest*ul.valor):'')+'</div></span><span style="text-align:right;white-space:nowrap">'+(per?'<b>'+fUSD(per)+'</b>':'<span style="opacity:.5">—</span>')+'<div style="'+SUB+'">no período</div></span></div>'; });
+    }
+    // Equinix
+    var eq={}; ra.forEach(function(r){ var v=(r.sup&&r.sup['EQUINIX'])||0; if(v) eq[r.mesNum]=(eq[r.mesNum]||0)+v; });
+    var eqm=Object.keys(eq).map(Number).sort(function(a,b){return a-b;});
+    if(eqm.length){ var et=0; eqm.forEach(function(m){et+=eq[m];}); var eall=ROWS.filter(function(r){return r.ano===ano&&(!mes||r.mesNum===mes);}).reduce(function(s,r){return s+((r.sup&&r.sup['EQUINIX'])||0);},0);
+      h+='<div style="font-weight:700;margin:14px 0 6px">Equinix</div><div style="font-size:13px">Custo no período <b>'+fBRL(et)+'</b> · média/mês '+fBRL(et/eqm.length)+' · '+fPct(eall?et/eall:0)+' do custo Equinix total · último mês ('+_mesCurto(eqm[eqm.length-1])+') '+fBRL(eq[eqm[eqm.length-1]])+'</div>'; }
+    // mês a mês
+    var mm=Object.keys(pm).map(Number).sort(function(a,b){return a-b;});
+    if(mm.length){ h+='<div style="font-weight:700;margin:14px 0 6px">Mês a mês — '+ano+'</div><table><thead><tr><th style="text-align:left">Mês</th><th style="text-align:right">Receita</th><th style="text-align:right">Custos</th><th style="text-align:right">Lucro</th></tr></thead><tbody>'+mm.map(function(n){ var m=pm[n], l=m.rl-m.cu; return '<tr><td>'+_mesCurto(n)+'</td><td style="text-align:right">'+fBRL(m.rl)+'</td><td style="text-align:right">'+fBRL(m.cu)+'</td><td style="text-align:right;color:'+(l<0?RED:'inherit')+'">'+fBRL(l)+'</td></tr>'; }).join('')+'</tbody></table><div style="'+SUB+';margin-top:4px">Receita = líquida.</div>'; }
+    document.getElementById('mobSheetBody').innerHTML=h; mobSheet(true);
+  }catch(e){ console.warn('mobCli',e); } };
   window.mobSheet=function(on){ document.getElementById('mobSheet').classList.toggle('on',!!on); };
   window.mobExplica=function(){ try{ var t=totals(rowsDe()), rl=t.rl||0, p=function(v){return rl?fPct(v/rl):'—';};
     function li(n,tx,v,bg){ return '<tr'+(bg?' style="background:rgba(42,120,214,.10)"':'')+'><td style="width:22px;opacity:.6">'+n+'</td><td>'+tx+'</td><td style="text-align:right;white-space:nowrap"><b>'+fBRL(v)+'</b></td></tr>'; }
