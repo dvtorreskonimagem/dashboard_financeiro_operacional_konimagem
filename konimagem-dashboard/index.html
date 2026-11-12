@@ -7664,7 +7664,28 @@ let CLI_SEL=''; let CLI_BUSCA=''; let CLI_SIM={saida:null,rej:0,multa:0};
 try{ CLI_SEL=sessionStorage.getItem('koni_cli_sel')||''; }catch(e){}
 let CLI_MULTAS={}; try{ CLI_MULTAS=JSON.parse(localStorage.getItem('koni_cli_multas')||'{}')||{}; }catch(e){ CLI_MULTAS={}; }
 function cliMultaSet(el){ const c=CLI_SEL, f=el.dataset.f; const v=parseFloat(String(el.value).replace(',','.')); CLI_MULTAS[c]=CLI_MULTAS[c]||{}; if(Number.isFinite(v)&&v>0) CLI_MULTAS[c][f]=v; else delete CLI_MULTAS[c][f]; try{ localStorage.setItem('koni_cli_multas',JSON.stringify(CLI_MULTAS)); }catch(e){} renderCliente(); }
-function cliMultasTotal(nome){ return Object.values(CLI_MULTAS[nome]||{}).reduce((s,v)=>s+(+v||0),0); }
+/* Multa de fornecedor: % (propriedade do fornecedor, vale para todos os clientes) x valor das parcelas restantes; se não houver %, vale o valor fixo digitado */
+let CLI_MPCT={},CLI_MPARC={}; try{ CLI_MPCT=JSON.parse(localStorage.getItem('koni_cli_mpct')||'{}')||{}; CLI_MPARC=JSON.parse(localStorage.getItem('koni_cli_mparc')||'{}')||{}; }catch(e){ CLI_MPCT={}; CLI_MPARC={}; }
+const CLI_MPCT_PADRAO={'EQUINIX':50};
+function cliMInp(el){
+  const t=el.dataset.t, f=el.dataset.f; const raw=String(el.value).trim().replace(',','.'); const v=parseFloat(raw); const ok=raw!==''&&Number.isFinite(v);
+  if(t==='pct'){ if(ok) CLI_MPCT[f]=Math.max(0,v); else delete CLI_MPCT[f]; }
+  else { CLI_MPARC[CLI_SEL]=CLI_MPARC[CLI_SEL]||{}; if(ok) CLI_MPARC[CLI_SEL][f]=Math.max(0,Math.round(v)); else delete CLI_MPARC[CLI_SEL][f]; }
+  try{ localStorage.setItem('koni_cli_mpct',JSON.stringify(CLI_MPCT)); localStorage.setItem('koni_cli_mparc',JSON.stringify(CLI_MPARC)); }catch(e){}
+  renderCliente();
+}
+function cliMultaForn(f,D,S){
+  const agM=D.refC?(D.refC.sup['AGFA-OPEX']||0):0; const isAg=f.cat==='agfa'; const sem=f.acao==='SEM AÇÃO';
+  const parcDef=isAg?(agM>0?Math.round(S.agRem/agM):0):S.n;
+  const ov=(CLI_MPARC[D.nome]||{})[f.nome]; const temOv=ov!=null;
+  const parc=temOv?ov:parcDef; const unit=isAg?agM:f.med3;
+  const valor=sem?0:(temOv?unit*parc:(isAg?S.agRem:f.med3*S.n));
+  const pctSt=CLI_MPCT[f.nome]; const pct=pctSt!=null?pctSt:(CLI_MPCT_PADRAO[f.nome]||0);
+  const fixa=(CLI_MULTAS[D.nome]||{})[f.nome]||0;
+  const multa=sem?0:(pct>0?valor*pct/100:fixa);
+  return {parcDef,parc,temOv,valor,pct,pctPadrao:pctSt==null&&pct>0,fixa,multa};
+}
+function cliMultasTotal(nome){ const D=cliDados(nome); const S=cliSimular(D); return D.forn.reduce((x,f)=>x+cliMultaForn(f,D,S).multa,0); }
 function cliCopiar(id){ const el=document.getElementById(id); if(!el) return; const t=el.innerText; try{ navigator.clipboard.writeText(t).then(()=>{ const b=document.getElementById(id+'Btn'); if(b){ b.textContent='✓ Copiado'; setTimeout(()=>b.textContent='Copiar texto',1800); } }); }catch(e){ const r=document.createRange(); r.selectNodeContents(el); const sl=window.getSelection(); sl.removeAllRanges(); sl.addRange(r); } }
 function cliChartResize(){ try{ if(CH.cliChart) CH.cliChart.resize(); }catch(e){} }
 const CLI_ACAO={'CANCELAR':{cor:'#DC2626',ord:0},'CONFIRMAR E CANCELAR':{cor:'#D97706',ord:1},'NEGOCIAR AGFA':{cor:'#7C3AED',ord:2},'REDISTRIBUIR':{cor:'#2F5D87',ord:3},'SEM AÇÃO':{cor:'#94A3B8',ord:4}};
@@ -7830,24 +7851,30 @@ function renderCliente(){
     kpi('RESULTADO MENSAL APÓS A SAÍDA',R(X.pos),'hoje: '+R(X.hoje)+' por mês',X.pos<0?'k-neg':'k-pos')+
     kpi('AGFA A PAGAR ATÉ O FIM DO CONTRATO',R(S.agRem),'compromisso mais pesado: negociar','k-cost')+
     kpi('COMPARTILHADOS ATÉ O FIM',R(X.comp*S.n),'redistribuídos aos outros clientes','k-cost')+
-    kpi('MULTAS INFORMADAS (FORNECEDORES)',R(multaF),'preencha na tabela abaixo','k-navy')+'</div>';
+    kpi('MULTAS DE FORNECEDORES (ESTIMADAS)',R(multaF),'% × parcelas restantes, na tabela abaixo','k-neg')+'</div>';
 
   /* ============ 2. FORNECEDORES ============ */
   const fl=D.forn.slice().sort((a,b)=>(CLI_ACAO[a.acao].ord-CLI_ACAO[b.acao].ord)||(b.med3-a.med3)||(b.total-a.total));
   const mM=CLI_MULTAS[CLI_SEL]||{};
-  let bf='';
+  let bf=''; const MF={}; fl.forEach(f=>MF[f.nome]=cliMultaForn(f,D,S));
   fl.forEach(f=>{
-    const ac=CLI_ACAO[f.acao]; const ate=f.acao==='SEM AÇÃO'?0:(f.cat==='agfa'?S.agRem:f.med3*S.n);
+    const ac=CLI_ACAO[f.acao]; const m=MF[f.nome]; const sem=f.acao==='SEM AÇÃO';
     const parc=f.primParc==null?'—':((f.primParc>0?f.primParc:'impl.')+' a '+f.ultParc+' ('+f.meses+' meses)');
-    const mi=(f.acao==='SEM AÇÃO')?'—':'<input type="number" step="0.01" min="0" data-f="'+esc(f.nome)+'" value="'+(mM[f.nome]||'')+'" placeholder="0,00" onchange="cliMultaSet(this)" style="width:110px;text-align:right">';
-    bf+='<tr'+(f.acao==='SEM AÇÃO'?' style="opacity:.62"':'')+'><td><span class="chip" style="background:'+ac.cor+';color:#fff;font-weight:700;white-space:nowrap">'+f.acao+'</span></td><td style="font-weight:700">'+esc(f.nome)+'</td><td style="min-width:250px;white-space:normal">'+esc(cliTexto(f,D))+'</td>'+
-      td(f.acao==='SEM AÇÃO'?'—':R(f.med3),1)+td(f.pct!=null?f.pct.toLocaleString('pt-BR',{maximumFractionDigits:2})+'%':'—',1)+td(ate?R(ate):'—',1)+
-      '<td style="white-space:normal;min-width:190px">'+(f.primParc==null?'—':('parcelas '+parc+'<br><span style="color:var(--ink3)">último: parcela '+(f.ultParc>0?f.ultParc:'impl.')+' · '+f.ultComp+' · '+R(f.ultValor)+'</span>'))+'</td><td style="text-align:right">'+mi+'</td></tr>';
+    const inp=(t,val,ph,w,extra)=>sem?'—':'<input type="number" step="any" min="0" data-t="'+t+'" data-f="'+esc(f.nome)+'" value="'+val+'" placeholder="'+ph+'" onchange="'+(t==='fixa'?'cliMultaSet(this)':'cliMInp(this)')+'" style="width:'+w+'px;text-align:right"'+(extra||'')+'>';
+    const iParc=inp('parc',m.temOv?m.parc:'',String(m.parcDef),70,' title="Parcelas restantes do fornecedor. Vazio = '+m.parcDef+' (até o fim do contrato do cliente)"');
+    const iPct=inp('pct',(CLI_MPCT[f.nome]!=null?CLI_MPCT[f.nome]:(m.pctPadrao?m.pct:'')),'0',64,m.pctPadrao?' title="Padrão informado (50%). Edite para mudar."':'');
+    const iFix=inp('fixa',mM[f.nome]||'','0,00',96);
+    bf+='<tr'+(sem?' style="opacity:.62"':'')+'><td><span class="chip" style="background:'+ac.cor+';color:#fff;font-weight:700;white-space:nowrap">'+f.acao+'</span></td><td style="font-weight:700">'+esc(f.nome)+'</td><td style="min-width:200px;max-width:260px;white-space:normal;font-size:12px">'+esc(cliTexto(f,D))+'</td>'+
+      td(sem?'—':R(f.med3),1)+td(f.pct!=null?f.pct.toLocaleString('pt-BR',{maximumFractionDigits:2})+'%':'—',1)+
+      '<td style="text-align:right">'+iParc+'</td>'+td(m.valor?R(m.valor):'—',1)+'<td style="text-align:right;white-space:nowrap">'+iPct+(sem?'':' %')+'</td><td style="text-align:right">'+iFix+'</td>'+
+      '<td style="text-align:right;font-weight:800;'+(m.multa>0?'color:var(--neg)':'')+'">'+(m.multa>0?R(m.multa):'—')+'</td>'+
+      '<td style="white-space:normal;min-width:150px;font-size:12px">'+(f.primParc==null?'—':('parcelas '+parc+'<br><span style="color:var(--ink3)">último: parcela '+(f.ultParc>0?f.ultParc:'impl.')+' · '+f.ultComp+' · '+R(f.ultValor)+'</span>'))+'</td></tr>';
   });
   const ativosCnt=fl.filter(f=>f.acao!=='SEM AÇÃO').length;
-  h+=sec('Fornecedores: o que fazer com cada um ('+ativosCnt+' com ação)','Ordenado por prioridade. Custo mensal = média dos últimos 3 meses com custos lançados (AGFA: valor do último mês, pois é parcela contratual). "Custo até o fim" = custo mensal × parcelas restantes (AGFA: parcelas restantes do contrato AGFA). Multa: campo para você anotar o valor informado pelo fornecedor (fica salvo só neste navegador).')+
-    tbl(['Ação','Fornecedor','O que fazer','>Custo mensal (média 3 meses; AGFA = último mês)','>% rateio','>Custo até o fim do contrato','Em que parcelas o custo apareceu','>Multa informada (R$)'],bf,
-      '<tr style="font-weight:800"><td colspan="3">TOTAL (fornecedores com ação)</td>'+tdb(R(fl.filter(f=>f.acao!=='SEM AÇÃO').reduce((x,f)=>x+f.med3,0)))+'<td></td>'+tdb(R(fl.filter(f=>f.acao!=='SEM AÇÃO').reduce((x,f)=>x+(f.cat==='agfa'?S.agRem:f.med3*S.n),0)))+'<td></td>'+tdb(R(multaF))+'</tr>',620);
+  const somaV=fl.reduce((x,f)=>x+MF[f.nome].valor,0);
+  h+=sec('Fornecedores: o que fazer com cada um ('+ativosCnt+' com ação)','Ordenado por prioridade. Custo mensal = média dos últimos 3 meses com custos lançados (AGFA: valor do último mês, pois é parcela contratual). "Valor das parcelas restantes" = custo mensal × parcelas restantes (você pode trocar o nº de parcelas se o contrato do fornecedor termina em outra data). "% multa": informe o percentual cobrado pelo fornecedor (vale para todos os clientes; Equinix já vem com 50%) e a coluna "Multa a pagar" calcula % × valor das parcelas restantes. Sem %, vale o valor fixo digitado. Estimativa para negociação; fica salvo só neste navegador.')+
+    tbl(['Ação','Fornecedor','O que fazer','>Custo mensal (média 3 meses; AGFA = último mês)','>% rateio','>Parcelas restantes','>Valor das parcelas restantes','>% multa','>Multa fixa (R$)','>Multa a pagar (R$)','Em que parcelas o custo apareceu'],bf,
+      '<tr style="font-weight:800"><td colspan="3">TOTAL (fornecedores com ação)</td>'+tdb(R(fl.filter(f=>f.acao!=='SEM AÇÃO').reduce((x,f)=>x+f.med3,0)))+'<td></td><td></td>'+tdb(R(somaV))+'<td></td><td></td>'+tdb(R(multaF))+'<td></td></tr>',620);
 
   /* texto pronto para a gerência */
   const lst=(a)=>fl.filter(f=>f.acao===a).map(f=>f.nome);
@@ -8092,7 +8119,7 @@ function cliExportar(){
   salvarTabela(mensal,nomeBase,{buildLocalWb:()=>{
     const wb=XLSX.utils.book_new(); const add=(n,rows)=>{ if(rows&&rows.length) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),n); };
     const c=D.c||{}; const inf=D.ult||D.rows[D.rows.length-1]||{};
-    add('Fornecedores - ação',D.forn.slice().sort((a,b)=>(CLI_ACAO[a.acao].ord-CLI_ACAO[b.acao].ord)||(b.med3-a.med3)).map(f=>({'Ação':f.acao,'Fornecedor':f.nome,'O que fazer':cliTexto(f,D),'Custo mensal (média 3 meses)':f.acao==='SEM AÇÃO'?0:f.med3,'% rateio':f.pct==null?'':f.pct,'Custo até o fim do contrato':f.acao==='SEM AÇÃO'?0:(f.cat==='agfa'?S.agRem:f.med3*S.n),'Último custo (competência)':f.ultComp,'Último custo (parcela)':f.ultParc,'Primeira parcela':f.primParc,'Multa informada (R$)':(CLI_MULTAS[CLI_SEL]||{})[f.nome]||'','Aviso prévio (dias)':'','Fim do contrato do fornecedor':'','Contato / status':''})));
+    add('Fornecedores - ação',D.forn.slice().sort((a,b)=>(CLI_ACAO[a.acao].ord-CLI_ACAO[b.acao].ord)||(b.med3-a.med3)).map(f=>({'Ação':f.acao,'Fornecedor':f.nome,'O que fazer':cliTexto(f,D),'Custo mensal (média 3 meses)':f.acao==='SEM AÇÃO'?0:f.med3,'% rateio':f.pct==null?'':f.pct,'Custo até o fim do contrato':f.acao==='SEM AÇÃO'?0:(f.cat==='agfa'?S.agRem:f.med3*S.n),'Último custo (competência)':f.ultComp,'Último custo (parcela)':f.ultParc,'Primeira parcela':f.primParc,'Parcelas restantes':cliMultaForn(f,D,S).parc,'Valor das parcelas restantes':cliMultaForn(f,D,S).valor,'% multa':cliMultaForn(f,D,S).pct,'Multa fixa (R$)':(CLI_MULTAS[CLI_SEL]||{})[f.nome]||'','Multa a pagar (R$)':cliMultaForn(f,D,S).multa,'Aviso prévio (dias)':'','Fim do contrato do fornecedor':'','Contato / status':''})));
     add('Contrato',[{'Cliente':CLI_SEL,'CNPJ':inf.cnpj||'','Contrato':c.contrato||inf.contrato||'','Tipo':c.tipo||inf.tipo||'','Início':D.prim?D.prim.comp:'','Parcela atual':D.parcAtual,'Prazo':D.prazo,'Restantes':D.rest,'Fim previsto':D.fim,'Status':c.status||''}]);
     add('Faturamento',mensal);
     add('Parcelas restantes (proj.)',D.proj.map(x=>({'Parcela':x.parcela,'Competência':x.comp,'Receita bruta':x.rb,'Receita líquida':x.rl,'Custo AGFA OPEX':x.agfa,'Demais custos':x.outros,'Resultado':x.res})));
