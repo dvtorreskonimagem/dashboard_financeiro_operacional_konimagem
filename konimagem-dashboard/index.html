@@ -2969,11 +2969,13 @@ html.ui2 #capaHero{margin-top:4px}
         <h2>Dados por cliente</h2>
         <p id="cliHint">Escolha um cliente no filtro abaixo para ver tudo sobre ele.</p>
       </div>
-      <div class="op-badges"><button class="mini-btn" onclick="cliExportar()" data-html2canvas-ignore="true">⬇ Exportar Excel</button>
+      <div class="op-badges"><button class="mini-btn" onclick="cliDeckAbrir()" data-html2canvas-ignore="true">📽 Gerar apresentação</button>
+        <button class="mini-btn" onclick="cliExportar()" data-html2canvas-ignore="true">⬇ Exportar Excel</button>
         <button class="mini-btn" onclick="window.print()" data-html2canvas-ignore="true">🖨 Imprimir</button></div>
     </div>
     <div class="panel" style="margin-bottom:6px;display:flex;gap:18px;align-items:end;flex-wrap:wrap" data-html2canvas-ignore="true">
       <div class="fgroup"><label>Cliente</label><select id="cliSelect" onchange="cliSel(this.value)" style="min-width:320px"></select></div>
+      <div class="fgroup"><label>Receita</label><div style="display:inline-flex;border:1px solid var(--line2);border-radius:8px;overflow:hidden"><button id="cliBase_liq" onclick="cliBaseSet('liq')" style="padding:8px 16px;border:0;cursor:pointer;font-weight:700;font-size:12.5px">Líquida</button><button id="cliBase_bru" onclick="cliBaseSet('bru')" style="padding:8px 16px;border:0;cursor:pointer;font-weight:700;font-size:12.5px">Bruta</button></div></div>
       <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2);padding-bottom:8px"><input type="checkbox" id="cliEnc" onchange="cliToggleEnc(this.checked)"> Incluir contratos encerrados</label>
     </div>
     <div id="cliCorpo"></div>
@@ -7682,6 +7684,9 @@ const _cliKMM=k=>String((k%12)+1).padStart(2,'0')+'/'+Math.floor(k/12);
 function cliListaClientes(){ const m={}; ROWS.forEach(r=>{ if(r.natureza==='RECEITA'&&r.segmento==='CLIENTE'&&r.cliente) m[r.cliente]=1; }); return Object.keys(m).sort((a,b)=>a.localeCompare(b,'pt-BR')); }
 function abrirDadosCliente(nome){ CLI_SEL=nome; CLI_SIM={saida:null,rej:0,multa:0}; try{ sessionStorage.setItem('koni_cli_sel',nome); }catch(e){} goPage('cliente'); }
 function cliSel(nome){ CLI_SEL=nome||''; CLI_SIM={saida:null,rej:0,multa:0}; try{ sessionStorage.setItem('koni_cli_sel',nome); }catch(e){} renderCliente(); }
+let CLI_BASE='liq'; try{ CLI_BASE=sessionStorage.getItem('koni_cli_base')==='bru'?'bru':'liq'; }catch(e){}
+function cliBaseSet(v){ CLI_BASE=v==='bru'?'bru':'liq'; try{ sessionStorage.setItem('koni_cli_base',CLI_BASE); }catch(e){} renderCliente(); }
+function cliBaseUI(){ ['liq','bru'].forEach(k=>{ const b=document.getElementById('cliBase_'+k); if(b){ b.style.background=CLI_BASE===k?'var(--navy)':'transparent'; b.style.color=CLI_BASE===k?'#fff':'var(--ink2)'; } }); }
 let CLI_ENC=false; function cliToggleEnc(v){ CLI_ENC=!!v; cliDesenharLista(); }
 function cliSimSet(){
   const g=id=>{ const el=document.getElementById(id); return el?parseFloat(String(el.value).replace(',','.')):NaN; };
@@ -7760,7 +7765,7 @@ function cliDados(nome){
     let rb=ult.rb;
     for(let i=1;i<=rest;i++){
       const k=_cliChave(ult)+i; if(mesReaj&&((k%12)+1)===mesReaj) rb=rb*(1+(CLI_SIM.rej||0));
-      const rl=rb*aliq; proj.push({parcela:parcAtual+i,comp:_cliKMM(k),rb,rl,agfa:(i<=maxRestAg?agfaM:0),outros:med3out,res:rl-(i<=maxRestAg?agfaM:0)-med3out});
+      const rl=rb*aliq; proj.push({parcela:parcAtual+i,comp:_cliKMM(k),rb,rl,agfa:(i<=maxRestAg?agfaM:0),outros:med3out,res:rl-(i<=maxRestAg?agfaM:0)-med3out,resB:rb-(i<=maxRestAg?agfaM:0)-med3out});
     }
   }
   const lancAg=AGFA_LANC.filter(l=>l.cliente===nome).sort((a,b)=>(a.ano*12+a.mesNum)-(b.ano*12+b.mesNum));
@@ -7773,7 +7778,7 @@ function cliDecisao(D,S){
   const at=D.forn.filter(f=>f.ativo&&f.cat!=='sunk');
   const sum=c=>at.filter(f=>f.cat===c).reduce((x,f)=>x+f.med3,0);
   const ded=sum('ded'), dir=sum('dir'), comp=sum('comp');
-  const agM=D.refC?(D.refC.sup['AGFA-OPEX']||0):0; const rlMes=D.ult?D.ult.rl:0;
+  const agM=D.refC?(D.refC.sup['AGFA-OPEX']||0):0; const rlMes=D.ult?(CLI_BASE==='bru'?D.ult.rb:D.ult.rl):0;
   return {ded,dir,comp,agM,rlMes,cessa:ded+dir,fica:agM+comp,pos:-(agM+comp),hoje:rlMes-(ded+dir+comp+agM)};
 }
 /* Simulador de rescisão: parcelas restantes viram perda de receita; custos que ficam dependem do tipo */
@@ -7781,7 +7786,7 @@ function cliSimular(D){
   const saidaMin=D.parcAtual, saidaMax=D.prazo||D.parcAtual;
   let saida=CLI_SIM.saida; if(saida==null||!Number.isFinite(saida)) saida=D.parcAtual; saida=Math.min(Math.max(saida,saidaMin),saidaMax);
   const p=D.proj.filter(x=>x.parcela>saida);
-  const rb=p.reduce((s,x)=>s+x.rb,0), rl=p.reduce((s,x)=>s+x.rl,0), outros=p.reduce((s,x)=>s+x.outros,0), res=p.reduce((s,x)=>s+x.res,0);
+  const rb=p.reduce((s,x)=>s+x.rb,0), rl=p.reduce((s,x)=>s+x.rl,0), outros=p.reduce((s,x)=>s+x.outros,0), res=p.reduce((s,x)=>s+(CLI_BASE==='bru'?x.resB:x.res),0);
   // AGFA: OPEX do cliente continua até o fim do contrato AGFA (limitado ao prazo de cada contrato)
   const agMx=D.refC?(D.refC.sup['AGFA-OPEX']||0):0; const agOpex=D.ag.filter(a=>a.tipo==='OPEX'); const maxRest=agOpex.length?Math.max(...agOpex.map(a=>a.restantes)):(agMx>0?D.rest:0);
   const agM=D.refC?(D.refC.sup['AGFA-OPEX']||0):0;
@@ -7789,10 +7794,10 @@ function cliSimular(D){
   const n=p.length;
   const med=cat=>D.forn.filter(f=>f.cat===cat).reduce((s,f)=>s+f.med3,0)*n;
   const comp=med('comp'), ded=med('ded'), dir=med('dir');
-  return {saida,saidaMin,saidaMax,n,rb,rl,outros,res,agRem,comp,ded,dir,multa:CLI_SIM.multa||0};
+  return {saida,saidaMin,saidaMax,n,rb,rl,rec:(CLI_BASE==='bru'?rb:rl),outros,res,agRem,comp,ded,dir,multa:CLI_SIM.multa||0};
 }
 function renderCliente(){
-  cliDesenharLista();
+  cliDesenharLista(); cliBaseUI();
   const corpo=document.getElementById('cliCorpo'); if(!corpo) return;
   if(CH.cliChart){ try{CH.cliChart.dispose();}catch(e){} delete CH.cliChart; }
   const hint=document.getElementById('cliHint');
@@ -7802,7 +7807,7 @@ function renderCliente(){
     corpo.innerHTML='<div class="banner"><span>&#8505;</span><div>Escolha um cliente no filtro acima.</div></div>'; return;
   }
   const D=cliDados(CLI_SEL); const S=cliSimular(D); const X=cliDecisao(D,S);
-  if(hint) hint.textContent=CLI_SEL+' · dados até '+(D.refC?D.refC.comp:(D.ult?_cliMM(D.ult):'—'))+' · valores em R$ completos';
+  if(hint) hint.textContent=CLI_SEL+' · dados até '+(D.refC?D.refC.comp:(D.ult?_cliMM(D.ult):'—'))+' · valores em R$ completos · receita '+(CLI_BASE==='bru'?'bruta (impostos não descontados do resultado)':'líquida (após impostos)');
   const R=v=>fBRL(v), N=v=>(v||0).toLocaleString('pt-BR');
   const td=(v,cls)=>'<td'+(cls?' style="text-align:right"':'')+'>'+v+'</td>';
   const tdb=v=>'<td style="text-align:right;font-weight:700">'+v+'</td>';
@@ -7819,7 +7824,7 @@ function renderCliente(){
   /* ============ 1. DECISÃO ============ */
   h+=sec('Se o contrato for cancelado','Estimativas por mês com base na média dos últimos 3 meses com custos lançados. Dedicados e "confirmar" deixam de existir com o cancelamento; AGFA e compartilhados tendem a continuar.')+'<div class="kpi-grid">'+
     kpi('PARCELAS RESTANTES',D.rolling?'contínuo':String(S.n),D.fim?'contrato vai até '+D.fim+' · parcela '+D.parcAtual+' de '+(D.prazo||'—'):'')+
-    kpi('RECEITA LÍQUIDA PERDIDA POR MÊS',R(X.rlMes),'total restante: '+R(S.rl),'k-neg')+
+    kpi('RECEITA '+(CLI_BASE==='bru'?'BRUTA':'LÍQUIDA')+' PERDIDA POR MÊS',R(X.rlMes),'total restante: '+R(S.rec),'k-neg')+
     kpi('CUSTO MENSAL QUE CESSA',R(X.cessa),'dedicados '+R(X.ded)+' · a confirmar '+R(X.dir),'k-pos')+
     kpi('CUSTO MENSAL QUE PERMANECE',R(X.fica),'AGFA '+R(X.agM)+' · compartilhados '+R(X.comp),'k-cost')+
     kpi('RESULTADO MENSAL APÓS A SAÍDA',R(X.pos),'hoje: '+R(X.hoje)+' por mês',X.pos<0?'k-neg':'k-pos')+
@@ -7851,7 +7856,7 @@ function renderCliente(){
   if(lst('CONFIRMAR E CANCELAR').length) par.push('<b>Confirmar e cancelar</b> (custo direto sem rateio): '+lst('CONFIRMAR E CANCELAR').map(esc).join(', ')+' — '+R(X.dir)+' por mês.');
   if(lst('NEGOCIAR AGFA').length){ const a=D.ag.find(x=>x.tipo==='OPEX'); par.push('<b>Negociar com a AGFA</b>: '+(a?'contrato '+esc(a.servico)+' com '+a.restantes+' parcelas restantes até '+a.fim+', cerca de '+R(S.agRem)+' ('+R(X.agM)+' por mês). ':'')+'Verificar multa, cessão a outro cliente ou redução.'); }
   if(lst('REDISTRIBUIR').length) par.push('<b>Redistribuir ou reduzir</b> (compartilhados): '+lst('REDISTRIBUIR').map(esc).join(', ')+' — '+R(X.comp)+' por mês que passam aos demais clientes, salvo redução do serviço.');
-  par.push('<b>Impacto:</b> deixam de entrar '+R(X.rlMes)+' de receita líquida por mês ('+S.n+' parcelas, '+R(S.rl)+'). Após a saída o resultado mensal estimado é de '+R(X.pos)+' (hoje '+R(X.hoje)+').'+(multaF>0?' Multas informadas pelos fornecedores: '+R(multaF)+'.':' Multas ainda não informadas.'));
+  par.push('<b>Impacto:</b> deixam de entrar '+R(X.rlMes)+' de receita '+(CLI_BASE==='bru'?'bruta':'líquida')+' por mês ('+S.n+' parcelas, '+R(S.rec)+'). Após a saída o resultado mensal estimado é de '+R(X.pos)+' (hoje '+R(X.hoje)+').'+(multaF>0?' Multas informadas pelos fornecedores: '+R(multaF)+'.':' Multas ainda não informadas.'));
   h+='<div class="panel" style="margin-top:14px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px"><b style="color:var(--navy)">Resumo para a gerência</b><button id="cliTxtBtn" class="mini-btn" onclick="cliCopiar(\'cliTxt\')" data-html2canvas-ignore="true">Copiar texto</button></div><div id="cliTxt" style="font-size:13.5px;line-height:1.6">'+par.map(p=>'<p style="margin:0 0 8px">'+p+'</p>').join('')+'</div></div>';
 
   /* ============ 3. CONTRATO + SIMULADOR ============ */
@@ -7890,8 +7895,8 @@ function renderCliente(){
     tbl(['Competência','Parcela','NF','Pedido','>Receita bruta','>Impostos','>Receita líquida','>Custos','>Lucro','>Margem s/ RL','>Exames'],b,foot,520));
   // parcelas restantes
   if(D.proj.length){
-    let bp='', sp={rb:0,rl:0,ag:0,ou:0,rs:0}; D.proj.forEach(x=>{ sp.rb+=x.rb; sp.rl+=x.rl; sp.ag+=x.agfa; sp.ou+=x.outros; sp.rs+=x.res;
-      bp+='<tr><td>'+x.parcela+'</td><td>'+x.comp+'</td>'+td(R(x.rb),1)+td(R(x.rl),1)+td(R(x.agfa),1)+td(R(x.outros),1)+'<td style="text-align:right;'+neg(x.res)+'">'+R(x.res)+'</td></tr>'; });
+    let bp='', sp={rb:0,rl:0,ag:0,ou:0,rs:0}; D.proj.forEach(x=>{ sp.rb+=x.rb; sp.rl+=x.rl; sp.ag+=x.agfa; sp.ou+=x.outros; sp.rs+=(CLI_BASE==='bru'?x.resB:x.res);
+      bp+='<tr><td>'+x.parcela+'</td><td>'+x.comp+'</td>'+td(R(x.rb),1)+td(R(x.rl),1)+td(R(x.agfa),1)+td(R(x.outros),1)+'<td style="text-align:right;'+neg(CLI_BASE==='bru'?x.resB:x.res)+'">'+R(CLI_BASE==='bru'?x.resB:x.res)+'</td></tr>'; });
     h+=det('Parcelas restantes (projeção): '+D.proj.length+' parcelas · receita líquida '+R(sp.rl),
       '<p class="hint" style="margin:0 0 10px">PROJEÇÃO: último valor faturado, reajuste do simulador (padrão 0%) no mês de reajuste, custo AGFA OPEX do último mês com custos e média dos demais custos dos últimos 3 meses.</p>'+
       tbl(['Parcela','Competência','>Receita bruta','>Receita líquida','>Custo AGFA OPEX','>Demais custos','>Resultado'],bp,'<tr style="font-weight:800"><td colspan="2">TOTAL</td>'+tdb(R(sp.rb))+tdb(R(sp.rl))+tdb(R(sp.ag))+tdb(R(sp.ou))+tdb(R(sp.rs))+'</tr>',420));
@@ -7938,6 +7943,147 @@ function renderCliente(){
   }catch(e){ console.warn('cliChart',e); }
 }
 /* Exportação: um .xlsx com uma aba por assunto (valores calculados pela mesma função da tela) */
+/* ===== Apresentação de cenários (distrato / encerramento) ===== */
+function cliDeckMesTxt(k){ const s=_cliKMM(k); const p=String(s).split('/'); const M=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez']; return (M[(+p[0])-1]||p[0])+'/'+String(p[1]||'').slice(-2); }
+function cliDeckPadrao(D){
+  const ult=D.ult||{}; const femme=/FEMME/i.test(D.nome); const info=D.ult||D.rows[D.rows.length-1]||{};
+  const mensB=ult.rb||0, mensL=ult.rl||0;
+  const rest=D.rolling?0:(D.rest||0); const n=femme?Math.min(24,rest||24):rest;
+  const fimK=(D.ult&&!D.rolling&&D.fim)?_cliChave(D.ult)+(D.rest||0):0;
+  const per=fimK&&n?cliDeckMesTxt(fimK-n+1)+' a '+cliDeckMesTxt(fimK):'';
+  const fimTxt=fimK?cliDeckMesTxt(fimK):'';
+  const hoje=new Date(); const MM=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const nomeC=D.nome.charAt(0)+D.nome.slice(1).toLowerCase();
+  return {
+    base:'bru', mensB, mensL, cliente:D.nome, projeto:femme?'Projeto PACS Enterprise Imaging':'Encerramento de contrato',
+    subtitulo:femme?'Encerramento do contrato E.I.: três cenários':'Encerramento de contrato: cenários', dataTxt:MM[hoje.getMonth()]+' de '+hoje.getFullYear(), dataCurta:MM[hoje.getMonth()].slice(0,3)+'/'+String(hoje.getFullYear()).slice(-2),
+    contrato:(D.c&&D.c.contrato)||info.contrato||'', parcAtual:D.parcAtual, prazo:D.prazo||0, fimTxt, n, per,
+    migVal:femme?1100000:0, migMeses:femme?18:0, discoVal:femme?801900:0, discoTxt:femme?'FEMME, 18 meses':'',
+    multaPct:femme?20:0, multaParc:femme?24:n, multaFixa:femme?280000:0,
+    c1:true,c2:true,c3:true,
+    ctx:femme?['Contexto | Fleury adquiriu a Femme | O Grupo Fleury já utiliza o PACS Philips e deseja consolidar a operação de imagens em uma única solução.',
+      'Situação atual | Contrato '+((D.c&&D.c.contrato)||info.contrato||'')+' | Parcela {parc} de {prazo}, mensalidade vigente de {mens} e vigência até {fim}.',
+      'Objetivo | Três caminhos | Encerrar de imediato, seguir com o contrato usando o VNA ou manter o contrato com benefícios embarcados.'].join('\n')
+      :['Contexto | A preencher | ','Situação atual | Contrato '+((D.c&&D.c.contrato)||info.contrato||'')+' | Parcela {parc} de {prazo}, mensalidade vigente de {mens} e vigência até {fim}.','Objetivo | A preencher | '].join('\n'),
+    ben:femme?['VNA | Acesso às imagens pelo VNA | As imagens do E.I. ficam acessíveis com visualização no PACS Philips.',
+      'US | Ultrassom | Armazenagem e visualização de ultrassom, com redução de custo da solução TESI.',
+      'Ologias | Outras especialidades | Endoscopia, odontologia, medicina nuclear, hemodinâmica e cardiologia, com redução de custo das soluções que hoje abrigam essas especialidades.'].join('\n'):'',
+    tec:femme?['A preencher · Diogo | Volumetria e método de migração | Volume do acervo, formatos, etapas, janelas e validação.',
+      'A preencher · Diogo | Prazo e equipes | Cronograma, marcos e papéis de Konimagem, Fleury e Philips.',
+      'A preencher · Diogo | Arquitetura e integração | VNA, integração com o PACS Philips, infraestrutura e segurança.',
+      'A preencher · Diogo | Apresentação da ferramenta | Corpo clínico, técnicos e TI.'].join('\n'):'',
+    pas:femme?['Escolha do cenário | A FEMME e o Grupo Fleury indicam o cenário de preferência.','Prazo de migração | Alinhar o prazo real de migração e o plano de transição.','Levantamento técnico | Volumetria do acervo, formatos, laudos e integrações.','Formalização | Instrumento assinado pelas partes e notificação formal.'].join('\n')
+      :['Escolha do cenário | O cliente indica o cenário de preferência.','Prazo de migração | Alinhar prazo e plano de transição.','Levantamento técnico | Volumetria, formatos e integrações.','Formalização | Instrumento assinado pelas partes.'].join('\n'),
+    nota1:femme?'Multa paga no ato do encerramento (capex).':'', nota2:femme?'Fim dos dois PACS em paralelo; E.I. passa a visualizador do legado.':'', nota3:femme?'Acesso via VNA e armazenagem de US e outras ologias, com perspectiva de economia em outras soluções.':'',
+    rodape:'{mens} · {n} parcelas restantes · sem IPCA · migração e disco são estimativas a confirmar · custo de pessoal a estimar.'
+  };
+}
+function cliDeckLer(D){
+  const P=cliDeckPadrao(D); let S=null; try{ S=JSON.parse(localStorage.getItem('koni_deck_'+D.nome)||'null'); }catch(e){}
+  const o=Object.assign({},P,S||{}); o.mensB=P.mensB; o.mensL=P.mensL; o.contrato=(S&&S.contrato!=null)?S.contrato:P.contrato; return o;
+}
+function cliDeckAbrir(){
+  if(!CLI_SEL){ alert('Escolha um cliente primeiro.'); return; }
+  const D=cliDados(CLI_SEL); const o=cliDeckLer(D); window._deckD=D;
+  const inp=(id,l,v,w,t)=>'<div class="fgroup"><label>'+l+'</label><input id="dk_'+id+'" type="'+(t||'number')+'" step="any" value="'+esc(String(v==null?'':v))+'" style="width:'+(w||150)+'px"></div>';
+  const ta=(id,l,v,rows)=>'<div class="fgroup" style="flex:1 1 100%"><label>'+l+'</label><textarea id="dk_'+id+'" rows="'+(rows||3)+'" style="width:100%;font:inherit;font-size:12.5px;padding:8px;border:1px solid var(--line2);border-radius:8px;background:var(--card,#fff);color:inherit">'+esc(v||'')+'</textarea></div>';
+  const chk=(id,l,v)=>'<label style="display:flex;align-items:center;gap:6px;font-size:12.5px"><input type="checkbox" id="dk_'+id+'"'+(v?' checked':'')+'> '+l+'</label>';
+  const mens=o.base==='bru'?o.mensB:o.mensL;
+  const body='<div style="font-size:12.5px;color:var(--ink2);margin-bottom:10px">Os valores vêm do dashboard e você pode ajustar tudo antes de gerar. O que for alterado fica salvo neste navegador para o cliente. Migração, disco e multa são estimativas informadas por você.</div>'+
+    '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end">'+
+    '<div class="fgroup"><label>Mensalidade usada</label><select id="dk_base" onchange="cliDeckBase()" style="width:210px"><option value="bru"'+(o.base==='bru'?' selected':'')+'>Bruta ('+fBRL(o.mensB)+')</option><option value="liq"'+(o.base==='liq'?' selected':'')+'>Líquida ('+fBRL(o.mensL)+')</option></select></div>'+
+    inp('parcAtual','Parcela atual',o.parcAtual,90)+inp('prazo','Prazo (parcelas)',o.prazo,90)+inp('n','Parcelas de manutenção (cen. 2 e 3)',o.n,140)+inp('per','Período da manutenção',o.per,150,'text')+inp('fimTxt','Vigência até',o.fimTxt,100,'text')+
+    '</div><div style="font-weight:700;margin:14px 0 6px;color:var(--navy)">Valores dos cenários</div><div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end">'+
+    inp('migVal','Migração (R$)',o.migVal,150)+inp('migMeses','Meses de migração',o.migMeses,110)+inp('discoVal','Disco / armazenagem (R$)',o.discoVal,150)+inp('discoTxt','Descrição do disco',o.discoTxt,180,'text')+
+    inp('multaPct','Multa: % das parcelas',o.multaPct,110)+inp('multaParc','Multa: nº de parcelas',o.multaParc,110)+inp('multaFixa','Multa: valor fixo (R$)',o.multaFixa,150)+'</div>'+
+    '<div style="display:flex;gap:18px;flex-wrap:wrap;margin:12px 0">'+chk('c1','Cenário 1 — encerramento imediato',o.c1)+chk('c2','Cenário 2 — continuidade com a ferramenta VNA',o.c2)+chk('c3','Cenário 3 — manutenção com benefícios embarcados',o.c3)+'</div>'+
+    '<div style="font-weight:700;margin:6px 0;color:var(--navy)">Textos dos slides</div><div style="display:flex;gap:12px;flex-wrap:wrap">'+
+    inp('projeto','Nome do projeto (rodapé)',o.projeto,260,'text')+inp('subtitulo','Subtítulo da capa',o.subtitulo,340,'text')+
+    ta('ctx','Contexto e objetivo (um card por linha: Rótulo | Título | Texto). Use {parc} {prazo} {mens} {fim}',o.ctx,4)+
+    ta('nota1','Nota do cenário 1',o.nota1,1)+ta('nota2','Nota do cenário 2',o.nota2,1)+ta('nota3','Nota do cenário 3',o.nota3,2)+
+    ta('ben','Benefícios do cenário 3 (Rótulo | Título | Texto). Deixe vazio para omitir o slide',o.ben,4)+
+    ta('tec','Detalhamento técnico (Responsável | Título | Texto). Deixe vazio para omitir o slide',o.tec,4)+
+    ta('pas','Próximos passos (Título | Texto)',o.pas,4)+ta('rodape','Rodapé do slide de cenários. Use {mens} {n}',o.rodape,2)+'</div>'+
+    '<div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end"><button class="mini-btn" onclick="cliDeckRestaurar()">Restaurar sugestão</button><button class="mini-btn" style="background:var(--navy);color:#fff" onclick="cliDeckGerar()">📽 Gerar apresentação</button></div>';
+  openModal('Apresentação de cenários — '+esc(CLI_SEL),body);
+  try{ document.querySelector('#modalBg .modal').style.maxWidth='980px'; }catch(e){}
+}
+function cliDeckBase(){}
+function cliDeckRestaurar(){ try{ localStorage.removeItem('koni_deck_'+CLI_SEL); }catch(e){} cliDeckAbrir(); }
+function cliDeckColetar(D){
+  const P=cliDeckPadrao(D); const g=id=>{ const el=document.getElementById('dk_'+id); return el?el.value:''; };
+  const num=id=>{ const v=parseFloat(String(g(id)).replace(',','.')); return Number.isFinite(v)?v:0; };
+  const o=Object.assign({},P);
+  ['projeto','subtitulo','ctx','ben','tec','pas','nota1','nota2','nota3','rodape','per','fimTxt','discoTxt'].forEach(k=>o[k]=g(k));
+  ['parcAtual','prazo','n','migVal','migMeses','discoVal','multaPct','multaParc','multaFixa'].forEach(k=>o[k]=num(k));
+  o.base=g('base')==='liq'?'liq':'bru'; ['c1','c2','c3'].forEach(k=>{ const el=document.getElementById('dk_'+k); o[k]=!!(el&&el.checked); });
+  return o;
+}
+function cliDeckGerar(){
+  const D=window._deckD; const o=cliDeckColetar(D);
+  try{ const s=Object.assign({},o); delete s.mensB; delete s.mensL; localStorage.setItem('koni_deck_'+D.nome,JSON.stringify(s)); }catch(e){}
+  if(!o.c1&&!o.c2&&!o.c3){ alert('Marque ao menos um cenário.'); return; }
+  const html=cliDeckHtml(o); 
+  const w=window.open('','_blank');
+  if(!w){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([html],{type:'text/html'})); a.target='_blank'; a.download='Apresentacao_'+D.nome.replace(/[^A-Za-z0-9]+/g,'_')+'.html'; document.body.appendChild(a); a.click(); a.remove(); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+}
+function cliDeckHtml(o){
+  const E=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fm=v=>'R$ '+Math.round(v).toLocaleString('pt-BR');
+  const fm2=v=>'R$ '+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const mens=o.base==='liq'?o.mensL:o.mensB;
+  const rep=s=>String(s||'').replace(/\{parc\}/g,o.parcAtual).replace(/\{prazo\}/g,o.prazo||'—').replace(/\{mens\}/g,fm2(mens)).replace(/\{fim\}/g,o.fimTxt||'—').replace(/\{n\}/g,o.n);
+  const linhas=s=>String(s||'').split('\n').map(x=>x.trim()).filter(Boolean).map(x=>x.split('|').map(p=>p.trim()));
+  const manut=mens*o.n, mig=o.migVal, disco=o.discoVal;
+  const multa=(o.multaPct/100)*o.multaParc*mens+o.multaFixa;
+  const mensMig=mens*o.migMeses;
+  const sc=[];
+  if(o.c1){ const it=[]; if(mig>0) it.push(['Migração',o.migMeses?o.migMeses+' meses':'',mig]); it.push(['Mensalidades',o.migMeses+' meses de operação assistida',mensMig]); if(disco>0) it.push(['Disco / armazenagem',o.discoTxt,disco]);
+    if(multa>0) it.push(['Multa contratual',(o.multaPct?o.multaPct+'% de '+o.multaParc+' parcelas':'')+(o.multaFixa?(o.multaPct?' + ':'')+fm(o.multaFixa)+' fixos':''),multa]);
+    sc.push({t:'Encerramento imediato do contrato',it,tot:it.reduce((s,x)=>s+x[2],0),sub:multa>0?'Com capex de '+fm(multa):'Sem capex',nota:o.nota1}); }
+  if(o.c2){ const it=[['Manutenção',o.n+' mensalidades'+(o.per?', '+o.per:''),manut]]; if(mig>0) it.push(['Migração','Estimativa Konimagem',mig]); if(disco>0) it.push(['Disco / armazenagem',o.discoTxt,disco]);
+    sc.push({t:'Continuidade até '+(o.fimTxt||'o fim do contrato')+' com a ferramenta VNA',it,tot:it.reduce((s,x)=>s+x[2],0),sub:'Sem capex',nota:o.nota2}); }
+  if(o.c3){ const it=[['Manutenção',o.n+' mensalidades'+(o.per?', '+o.per:''),manut]];
+    sc.push({t:'Manutenção com benefícios embarcados',it,tot:manut,sub:'',nota:o.nota3}); }
+  const minTot=Math.min(...sc.map(x=>x.tot));
+  let num=0; sc.forEach(x=>{ num++; x.n=num; if(o.c3&&x===sc[sc.length-1]) x.sub=(x.tot<=minTot&&sc.length>1)?'Menor custo, sem capex':'Sem capex'; });
+  /* os rótulos "Cenário N" seguem a numeração original (1, 2, 3) mesmo se algum for desmarcado */
+  const idx=[o.c1&&1,o.c2&&2,o.c3&&3].filter(Boolean); sc.forEach((x,i)=>x.n=idx[i]);
+  const S=[]; const foot=(n)=>'<div class="ft">'+E(o.projeto)+' · '+E(o.dataCurta)+' · '+n+'</div>';
+  S.push('<div class="cover"><div class="eb">'+E(o.cliente)+'</div><h1>'+E(o.projeto)+'</h1><h2>'+E(o.subtitulo)+'</h2><div class="dt">'+E(o.dataTxt)+'</div></div>');
+  const ctx=linhas(rep(o.ctx));
+  S.push('<h3>Contexto e objetivo</h3><div class="cards c'+Math.max(1,Math.min(ctx.length,4))+'">'+ctx.map(c=>{ const a=c.length>=3?c:[c[0],c[1]||'',c[2]||'']; return '<div class="card"><div class="lb">'+E(a[0])+'</div><div class="tt">'+E(a[1])+'</div><div class="tx">'+E(a[2])+'</div></div>'; }).join('')+'</div>'+foot(2));
+  S.push('<h3>'+(sc.length>1?'Os '+(sc.length===3?'três ':sc.length+' ')+'cenários em comparação':'Cenário')+'</h3><div class="cards scw c'+sc.length+'">'+sc.map(x=>
+    '<div class="card sc'+(x.n===3||(sc.length===1)?' hl':'')+'"><div class="lb">Cenário '+x.n+'</div><div class="tt">'+E(x.t)+'</div>'+
+    x.it.map(i=>'<div class="it"><div><b>'+E(i[0])+'</b><span>'+E(i[1])+'</span></div><b class="vl">'+fm(i[2])+'</b></div>').join('')+
+    '<div class="sp"></div><div class="tot"><span>Total do cenário</span><b>'+fm(x.tot)+'</b><em>'+E(x.sub)+'</em></div><div class="nt">'+E(x.nota)+'</div></div>').join('')+'</div>'+
+    '<div class="rod">'+E(rep(o.rodape))+'</div>'+foot(3));
+  let pg=3;
+  const ben=linhas(o.ben); if(ben.length){ pg++; S.push('<h3>Benefícios do cenário 3</h3><div class="cards c'+Math.min(ben.length,4)+'">'+ben.map(c=>{ const a=c.length>=3?c:[c[0],c[0],c[1]||'']; return '<div class="card"><div class="lb">'+E(a[0])+'</div><div class="tt">'+E(a[1])+'</div><div class="tx">'+E(a[2])+'</div></div>'; }).join('')+'</div>'+foot(pg)); }
+  const tec=linhas(o.tec); if(tec.length){ pg++; S.push('<div class="eb2">Em definição</div><h3>Detalhamento técnico</h3><div class="cards c'+Math.min(tec.length,4)+'">'+tec.map(c=>{ const a=c.length>=3?c:['A preencher',c[0],c[1]||'']; return '<div class="card dash"><div class="lb">'+E(a[0])+'</div><div class="tt">'+E(a[1])+'</div><div class="tx">'+E(a[2])+'</div></div>'; }).join('')+'</div>'+foot(pg)); }
+  const pas=linhas(o.pas); if(pas.length){ pg++; S.push('<h3>Próximos passos</h3><div class="cards c'+Math.min(pas.length,4)+'">'+pas.map((c,i)=>'<div class="card"><div class="nm">'+(i+1)+'</div><div class="tt">'+E(c[0])+'</div><div class="tx">'+E(c[1]||'')+'</div></div>').join('')+'</div>'+foot(pg)); }
+  const css='*{box-sizing:border-box}body{margin:0;background:#0a1222;font-family:Inter,"Segoe UI",Arial,sans-serif;color:#fff}.bar{position:sticky;top:0;z-index:9;display:flex;gap:10px;align-items:center;padding:10px 16px;background:#060c18;border-bottom:1px solid #22345a}.bar b{flex:1;font-size:14px}.bar button{background:#1f3f7a;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer;font-size:13px}.bar button:hover{background:#2a56a3}'+
+   '.wrap{margin:18px auto;overflow:hidden;border-radius:6px;box-shadow:0 6px 24px #0008}.slide{width:1280px;height:720px;background:#0f1b33;padding:46px 56px;position:relative;transform-origin:0 0;overflow:hidden}'+
+   '.slide h3{font-size:40px;margin:0 0 20px;font-weight:800;letter-spacing:-.5px}.cover{display:flex;flex-direction:column;justify-content:center;height:100%}.cover .eb{color:#e5383b;font-weight:800;letter-spacing:3px;font-size:20px;text-transform:uppercase}.cover h1{font-size:76px;margin:14px 0 8px;line-height:1.05}.cover h2{font-size:34px;font-weight:500;color:#c9d6ee;margin:0}.cover .dt{margin-top:60px;color:#8fa4cc;font-size:22px}'+
+   '.eb2{color:#e5383b;font-weight:800;letter-spacing:2px;text-transform:uppercase;font-size:15px;margin-bottom:6px}.cards{display:grid;gap:22px}.c1{grid-template-columns:1fr}.c2{grid-template-columns:1fr 1fr}.c3{grid-template-columns:repeat(3,1fr)}.c4{grid-template-columns:repeat(4,1fr)}'+
+   '.card{background:#172a4a;border:1px solid #243a63;border-radius:14px;padding:22px 24px;display:flex;flex-direction:column;min-width:0}.card.hl{border:2px solid #e5383b}.card.dash{border-style:dashed}.lb{color:#e5383b;font-weight:700;font-size:18px;margin-bottom:8px}.tt{font-size:26px;font-weight:700;line-height:1.15;margin-bottom:12px}.tx{font-size:20px;line-height:1.4;color:#d5def0}.nm{width:44px;height:44px;border-radius:50%;background:#e5383b;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;margin-bottom:14px}'+
+   '.scw{height:480px}.scw .card{padding:16px 20px;height:100%}.sc .tt{font-size:22px;padding-bottom:8px;margin-bottom:4px;border-bottom:1px solid #2a4170;min-height:58px}.sc .lb{font-size:16px;margin-bottom:4px}.it{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #2a4170}.it b{font-size:18px;display:block}.it span{font-size:14px;color:#b8c7e6;display:block;margin-top:1px}.it .vl{white-space:nowrap}.sp{flex:1}.tot{background:#21427f;border-radius:12px;padding:10px 16px;margin-top:8px}.tot span{font-size:15px;color:#d5def0;display:block}.tot b{font-size:36px;display:block;line-height:1.1}.tot em{font-style:normal;font-size:15px;color:#d5def0}.nt{font-size:14px;color:#d5def0;margin-top:8px;min-height:58px;line-height:1.3}'+
+   '.rod{position:absolute;left:56px;right:56px;bottom:44px;font-size:15px;color:#9db0d6}.ft{position:absolute;right:56px;bottom:18px;font-size:14px;color:#7f93bd}'+
+   '.pres .bar,.pres .wrap:not(.cur){display:none}.pres .wrap.cur{position:fixed;left:50%;top:50%;margin:0;border-radius:0}.pres body{overflow:hidden}'+
+   '@media print{@page{size:1280px 720px;margin:0}body{background:#fff}.bar{display:none}.wrap{margin:0!important;width:1280px!important;height:720px!important;box-shadow:none;border-radius:0;break-after:page}.slide{transform:none!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
+  const js='('+function(){
+    var ws=[].slice.call(document.querySelectorAll(".wrap")),cur=0,pres=false;
+    function fit(){ if(pres){ var s=Math.min(innerWidth/1280,innerHeight/720); ws.forEach(function(w,i){ var sl=w.firstChild; if(i===cur){ w.className="wrap cur"; w.style.width=1280*s+"px"; w.style.height=720*s+"px"; w.style.transform="translate(-50%,-50%)"; sl.style.transform="scale("+s+")"; } else w.className="wrap"; }); }
+      else { var s2=Math.min(1,(innerWidth-40)/1280); ws.forEach(function(w){ w.className="wrap"; w.style.transform=""; w.style.width=1280*s2+"px"; w.style.height=720*s2+"px"; w.firstChild.style.transform="scale("+s2+")"; }); } }
+    window.togglePres=function(){ pres=!pres; document.documentElement.className=pres?"pres":""; if(pres&&document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(function(){}); if(!pres&&document.fullscreenElement) document.exitFullscreen(); fit(); };
+    addEventListener("keydown",function(e){ if(e.key==="p"||e.key==="P"||e.key==="F5"){ e.preventDefault(); togglePres(); } else if(pres&&(e.key==="ArrowRight"||e.key==="PageDown"||e.key===" ")){ cur=Math.min(ws.length-1,cur+1); fit(); } else if(pres&&(e.key==="ArrowLeft"||e.key==="PageUp")){ cur=Math.max(0,cur-1); fit(); } else if(pres&&e.key==="Escape"){ togglePres(); } });
+    addEventListener("resize",fit); fit();
+  }.toString()+')()';
+  return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+E(o.projeto+' — '+o.cliente)+'</title><style>'+css+'</style></head><body><div class="bar"><b>'+E(o.projeto)+' · '+E(o.cliente)+'</b><button onclick="togglePres()">▶ Apresentar (P)</button><button onclick="print()">⬇ Salvar PDF / Imprimir</button></div>'+
+    S.map(s=>'<div class="wrap"><div class="slide">'+s+'</div></div>').join('')+'<script>'+js+'<\/script></body></html>';
+}
+
 function cliExportar(){
   if(!CLI_SEL){ alert('Escolha um cliente primeiro.'); return; }
   const D=cliDados(CLI_SEL); const S=cliSimular(D);
