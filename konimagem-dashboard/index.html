@@ -7675,7 +7675,7 @@ function cliMInp(el){
   renderCliente();
 }
 function cliMultaForn(f,D,S){
-  const agM=D.refC?(D.refC.sup['AGFA-OPEX']||0):0; const isAg=f.cat==='agfa'; const sem=f.acao==='SEM AÇÃO';
+  const agM=cliAgMensal(D.nome,D.refC); const isAg=f.cat==='agfa'; const sem=f.acao==='SEM AÇÃO';
   const parcDef=isAg?(agM>0?Math.round(S.agRem/agM):0):S.n;
   const ov=(CLI_MPARC[D.nome]||{})[f.nome]; const temOv=ov!=null;
   const parc=temOv?ov:parcDef; const unit=isAg?agM:f.med3;
@@ -7725,6 +7725,16 @@ function cliDesenharLista(){
   sel.value=lista.includes(CLI_SEL)?CLI_SEL:'';
 }
 /* Reúne TODOS os números de um cliente (usado pela tela e pela exportação — a mesma fonte para os dois) */
+/* Mensalidade AGFA OPEX do cliente em R$: usa o custo lançado no último mês completo; se esse mês não tem AGFA lançada, calcula pelo contrato AGFA (último valor em US$ x IOF x PTAX) */
+function cliAgMensal(nome,refC){
+  const v=refC?(refC.sup['AGFA-OPEX']||0):0; if(v>0) return v;
+  const PT=(typeof COTACAO_DOLAR_AGFA==='number'&&COTACAO_DOLAR_AGFA>0)?COTACAO_DOLAR_AGFA:0; if(!PT) return 0;
+  let tot=0; Object.values(AGFA_CONTRATOS).filter(x=>x.cliente===nome&&x.tipo==='OPEX').forEach(x=>{
+    const ls=AGFA_LANC.filter(l=>l.cliente===nome&&l.servico===x.servico).sort((a,b)=>(a.ano*12+a.mesNum)-(b.ano*12+b.mesNum)); const ul=ls[ls.length-1];
+    const atual=ul&&ul.parcelaAtual!=null?ul.parcelaAtual:agfaParcelaAtual(x).parcelaAtual; if(x.parcelaTotal-atual>0) tot+=(ul?ul.valor:0);
+  });
+  return tot*1.1111*PT;
+}
 function cliDados(nome){
   const rows=ROWS.filter(r=>r.cliente===nome&&r.natureza==='RECEITA').slice().sort(sortCrono);
   const fat=rows.filter(r=>r.rb>0);
@@ -7749,7 +7759,7 @@ function cliDados(nome){
     const tot=mensal.reduce((s,m)=>s+(m.sup[k]||0),0);
     const meses=mensal.filter(m=>(m.sup[k]||0)>0).length;
     // AGFA OPEX é parcela contratual (USD × PTAX): usa o último mês com custos, o mesmo valor da projeção; os demais usam a média de 3 meses
-    const med3=(k==='AGFA-OPEX'&&refC)?(refC.sup[k]||0):(ult3.length?ult3.reduce((s,m)=>s+(m.sup[k]||0),0)/ult3.length:0);
+    const med3=(k==='AGFA-OPEX')?cliAgMensal(nome,refC):(ult3.length?ult3.reduce((s,m)=>s+(m.sup[k]||0),0)/ult3.length:0);
     const rr=rat[k]; const isAg=(k==='AGFA-OPEX'||k==='AGFA-CAPEX');
     const tipo=isAg?(k==='AGFA-CAPEX'?'AGFA — investimento (CAPEX)':'AGFA — contrato (OPEX)'):(rr?(rr.pct>=99.99?'Dedicado (100% do cliente)':'Compartilhado (rateio)'):'Direto ao cliente (sem rateio)');
     const com=mensal.filter(m=>(m.sup[k]||0)>0); const pri=com[0], ulc=com[com.length-1];
@@ -7781,7 +7791,7 @@ function cliDados(nome){
   // projeção das parcelas restantes (premissas: último valor faturado, reajuste informado, custos = média 3 meses)
   const proj=[];
   if(ult&&rest>0){
-    const aliq=ult.rb?ult.rl/ult.rb:1; const agfaM=refC?(refC.sup['AGFA-OPEX']||0):0;
+    const aliq=ult.rb?ult.rl/ult.rb:1; const agfaM=cliAgMensal(nome,refC);
     const med3out=ult3.length?ult3.reduce((s,m)=>s+m.custo-(m.sup['AGFA-OPEX']||0)-(m.sup['AGFA-CAPEX']||0),0)/ult3.length:0;
     let rb=ult.rb;
     for(let i=1;i<=rest;i++){
@@ -7799,7 +7809,7 @@ function cliDecisao(D,S){
   const at=D.forn.filter(f=>f.ativo&&f.cat!=='sunk');
   const sum=c=>at.filter(f=>f.cat===c).reduce((x,f)=>x+f.med3,0);
   const ded=sum('ded'), dir=sum('dir'), comp=sum('comp');
-  const agM=D.refC?(D.refC.sup['AGFA-OPEX']||0):0; const rlMes=D.ult?(CLI_BASE==='bru'?D.ult.rb:D.ult.rl):0;
+  const agM=cliAgMensal(D.nome,D.refC); const rlMes=D.ult?(CLI_BASE==='bru'?D.ult.rb:D.ult.rl):0;
   return {ded,dir,comp,agM,rlMes,cessa:ded+dir,fica:agM+comp,pos:-(agM+comp),hoje:rlMes-(ded+dir+comp+agM)};
 }
 /* Simulador de rescisão: parcelas restantes viram perda de receita; custos que ficam dependem do tipo */
@@ -7809,8 +7819,8 @@ function cliSimular(D){
   const p=D.proj.filter(x=>x.parcela>saida);
   const rb=p.reduce((s,x)=>s+x.rb,0), rl=p.reduce((s,x)=>s+x.rl,0), outros=p.reduce((s,x)=>s+x.outros,0), res=p.reduce((s,x)=>s+(CLI_BASE==='bru'?x.resB:x.res),0);
   // AGFA: OPEX do cliente continua até o fim do contrato AGFA (limitado ao prazo de cada contrato)
-  const agMx=D.refC?(D.refC.sup['AGFA-OPEX']||0):0; const agOpex=D.ag.filter(a=>a.tipo==='OPEX'); const maxRest=agOpex.length?Math.max(...agOpex.map(a=>a.restantes)):(agMx>0?D.rest:0);
-  const agM=D.refC?(D.refC.sup['AGFA-OPEX']||0):0;
+  const agMx=cliAgMensal(D.nome,D.refC); const agOpex=D.ag.filter(a=>a.tipo==='OPEX'); const maxRest=agOpex.length?Math.max(...agOpex.map(a=>a.restantes)):(agMx>0?D.rest:0);
+  const agM=cliAgMensal(D.nome,D.refC);
   const agRem=agM*Math.max(0,maxRest-(saida-D.parcAtual));
   const n=p.length;
   const med=cat=>D.forn.filter(f=>f.cat===cat).reduce((s,f)=>s+f.med3,0)*n;
